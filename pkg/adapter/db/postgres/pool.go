@@ -4,20 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Pool struct {
-	*pgxpool.Pool
+	*gorm.DB
 }
 
 func NewPool(ctx context.Context, url string) (*Pool, error) {
-	p, err := pgxpool.New(ctx, url)
+	gdb, err := gorm.Open(postgres.Open(url), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("pgxpool.New: %w", err)
+		return nil, fmt.Errorf("gorm.Open: %w", err)
 	}
-	pool := &Pool{Pool: p}
+	pool := &Pool{DB: gdb}
 	err = pool.Conn(ctx, NoOpConnHandler)
 	if err != nil {
 		pool.Close()
@@ -33,7 +34,16 @@ func NoOpConnHandler(context.Context, repo.Conn) error {
 }
 
 func (p *Pool) Conn(ctx context.Context, f ConnHandler) error {
-	return p.Pool.AcquireFunc(ctx, func(c *pgxpool.Conn) error {
-		return f(ctx, &Conn{Conn: c})
+	return p.DB.WithContext(ctx).Connection(func(c *gorm.DB) error {
+		cc := &Conn{DB: c}
+		return f(ctx, cc)
 	})
+}
+
+func (p *Pool) Close() error {
+	db, err := p.DB.DB()
+	if err != nil {
+		return err
+	}
+	return db.Close()
 }

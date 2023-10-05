@@ -4,24 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"gorm.io/gorm"
 )
 
 type Conn struct {
-	*pgxpool.Conn
+	*gorm.DB
 }
 
 type TxHandler = repo.TxHandler
 
 func (c *Conn) Tx(ctx context.Context, f TxHandler) (err error) {
-	tx, err := c.Conn.Begin(ctx)
-	if err != nil {
+	tx := c.DB.WithContext(ctx).Begin()
+	if err = tx.Error; err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			err = tx.Rollback(ctx)
+			err = tx.Rollback().Error
 			if err == nil {
 				err = fmt.Errorf("panicked: %v", r)
 				return
@@ -30,30 +30,38 @@ func (c *Conn) Tx(ctx context.Context, f TxHandler) (err error) {
 			return
 		}
 		if err != nil {
-			if err2 := tx.Rollback(ctx); err2 != nil {
+			if err2 := tx.Rollback().Error; err2 != nil {
 				err = fmt.Errorf("handler: %w, rollback: %w", err, err2)
 				return
 			}
 			err = fmt.Errorf("handler: %w", err)
 			return
 		}
-		err = tx.Commit(ctx)
+		err = tx.Commit().Error
 		if err != nil {
 			err = fmt.Errorf("commit: %w", err)
 		}
 	}()
-	return f(ctx, &Tx{Tx: tx})
+	tt := &Tx{DB: tx}
+	return f(ctx, tt)
 }
 
 func (c *Conn) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
-	tag, err := c.Conn.Exec(ctx, sql, args...)
-	if err != nil {
+	tt := c.DB.WithContext(ctx).Exec(sql, args...)
+	if err := tt.Error; err != nil {
 		return 0, err
 	}
-	return tag.RowsAffected(), nil
+	return tt.RowsAffected, nil
 }
 
 func (c *Conn) Query(ctx context.Context, sql string, args ...any) (repo.Rows, error) {
-	rows, err := c.Conn.Query(ctx, sql, args...)
-	return rows, err
+	rows, err := c.DB.WithContext(ctx).Raw(sql, args...).Rows()
+	return rowsAdapter{rows}, err
+}
+
+func (c *Conn) IsConn() {
+}
+
+func (c *Conn) GORM(ctx context.Context) *gorm.DB {
+	return c.DB.WithContext(ctx)
 }
