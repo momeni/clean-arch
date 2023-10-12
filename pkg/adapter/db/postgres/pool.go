@@ -3,10 +3,14 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"time"
 
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type Pool struct {
@@ -18,6 +22,17 @@ func NewPool(ctx context.Context, url string) (*Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gorm.Open: %w", err)
 	}
+	gdb = gdb.Session(&gorm.Session{
+		Logger: logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+				SlowThreshold:             200 * time.Millisecond,
+				LogLevel:                  logger.Warn,
+				IgnoreRecordNotFoundError: false,
+				Colorful:                  true,
+				// Set to false in order to log with replaced vars
+				ParameterizedQueries: true,
+			}),
+	})
 	pool := &Pool{DB: gdb}
 	err = pool.Conn(ctx, NoOpConnHandler)
 	if err != nil {

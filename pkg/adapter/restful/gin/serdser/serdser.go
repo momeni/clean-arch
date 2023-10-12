@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/momeni/clean-arch/pkg/core/cerr"
 )
 
-func Bind(c *gin.Context, req any) bool {
-	switch err := c.ShouldBindQuery(req).(type) {
+func Bind(c *gin.Context, req any, b binding.Binding) bool {
+	switch err := c.ShouldBindWith(req, b).(type) {
 	case *validator.InvalidValidationError:
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"detail": err.Error(),
@@ -22,12 +23,20 @@ func Bind(c *gin.Context, req any) bool {
 		}
 		c.JSON(http.StatusBadRequest, nameToErrs)
 	default:
-		return true
+		if err == nil {
+			return true
+		}
+		c.JSON(http.StatusBadRequest, gin.H{
+			"detail": err.Error(),
+		})
 	}
 	return false
 }
 
 func AddErr(errs *map[string][]string, name string, msgs ...string) {
+	if (*errs) == nil {
+		*errs = make(map[string][]string)
+	}
 	if elist, ok := (*errs)[name]; !ok {
 		(*errs)[name] = msgs
 	} else {

@@ -5,20 +5,20 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/serdser"
 	"github.com/momeni/clean-arch/pkg/core/model"
 )
 
 type rawCarUpdateReq struct {
-	CarID string        `uri:"cid" binding:"required,uuid4"`
-	Op    string        `form:"op" binding:"required,oneof=ride park"`
-	Dst   StrCoordinate `binding:"omitempty"`
-	Mode  string        `form:"mode" binding:"omitempty,oneof=old new"`
+	Op   string         `form:"op" binding:"required,oneof=ride park"`
+	Dst  *StrCoordinate `binding:"omitempty"`
+	Mode string         `form:"mode" binding:"omitempty,oneof=old new"`
 }
 
 type StrCoordinate struct {
-	Lat string `form:"lat" binding:"required,latitude`
+	Lat string `form:"lat" binding:"required,latitude"`
 	Lon string `form:"lon" binding:"required,longitude"`
 }
 
@@ -41,7 +41,7 @@ func (sc StrCoordinate) ToModel() (c model.Coordinate, err error) {
 func (rs *resource) DserUpdateCarReq(c *gin.Context) *carUpdateReq {
 	req := &rawCarUpdateReq{}
 	val := &carUpdateReq{}
-	if ok := serdser.Bind(c, req); !ok {
+	if ok := serdser.Bind(c, req, binding.Form); !ok {
 		return nil
 	}
 	var errs map[string][]string
@@ -51,23 +51,38 @@ func (rs *resource) DserUpdateCarReq(c *gin.Context) *carUpdateReq {
 		}
 	}()
 	var err error
-	val.CarID, err = uuid.Parse(req.CarID)
+	val.CarID, err = uuid.Parse(c.Param("cid"))
 	if err != nil {
 		serdser.AddErr(&errs, "cid", "Path param cid is not UUID.")
 		return nil
 	}
+	val.Op = req.Op
 	switch req.Op {
 	case "ride":
-		if serdser.Assert(&errs, req.Dst.Lat != "", "lat/lon", "The op=ride requires lat and lon.") &&
-			serdser.Assert(&errs, req.Mode == "", "mode", "The op=ride does not need mode.") {
+		if serdser.Assert(
+			&errs, req.Dst != nil,
+			"lat/lon", "The op=ride requires lat and lon.",
+		) && serdser.Assert(
+			&errs, req.Mode == "",
+			"mode", "The op=ride does not need mode.",
+		) {
 			val.Dst, err = req.Dst.ToModel()
-			serdser.Assert(&errs, err == nil, "lat/lon", err.Error())
+			if err != nil {
+				serdser.AddErr(&errs, "lat/lon", err.Error())
+			}
 		}
 	case "park":
-		if serdser.Assert(&errs, req.Dst.Lat == "", "lat/lon", "The op=park does not need lat/lon.") &&
-			serdser.Assert(&errs, req.Mode != "", "mode", "The op=park requires mode.") {
+		if serdser.Assert(
+			&errs, req.Dst == nil,
+			"lat/lon", "The op=park does not need lat/lon.",
+		) && serdser.Assert(
+			&errs, req.Mode != "",
+			"mode", "The op=park requires mode.",
+		) {
 			val.Mode, err = model.ParseParkingMode(req.Mode)
-			serdser.Assert(&errs, err == nil, "mode", err.Error())
+			if err != nil {
+				serdser.AddErr(&errs, "mode", err.Error())
+			}
 		}
 	default:
 		panic("unknown op")

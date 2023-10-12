@@ -2,6 +2,7 @@ package carsuc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,10 +14,28 @@ import (
 type UseCase struct {
 	pool   repo.Pool
 	carsrp repo.Cars
+
+	oldParkingMethodDelay time.Duration
 }
 
-func New(p repo.Pool, c repo.Cars) *UseCase {
-	return &UseCase{pool: p, carsrp: c}
+// New instantiates a cars use case.
+// Required parameters are passed individually, so caller has to
+// provision them and whenever they change, caller will notice and fix
+// them due to a compilation error.
+// Optional parameters are passed as a series of functional options
+// in order to facilitate their validation and flexibility.
+func New(p repo.Pool, c repo.Cars, opts ...Option) (*UseCase, error) {
+	uc := &UseCase{pool: p, carsrp: c}
+	for _, opt := range opts {
+		if err := opt(uc); err != nil {
+			return nil, fmt.Errorf("invalid option: %w", err)
+		}
+	}
+	// now, deal with defaults
+	if uc.oldParkingMethodDelay == 0 {
+		uc.oldParkingMethodDelay = 10 * time.Second
+	}
+	return uc, nil
 }
 
 func (cars *UseCase) Ride(ctx context.Context, cid uuid.UUID, destination model.Coordinate) (car *model.Car, err error) {
@@ -37,7 +56,7 @@ func (cars *UseCase) Park(ctx context.Context, cid uuid.UUID, mode model.Parking
 		return nil, cerr.BadRequest(err)
 	}
 	if mode == model.ParkingModeOld {
-		time.Sleep(1 * time.Minute) // old method is slow :)
+		time.Sleep(cars.oldParkingMethodDelay) // old method is slow :)
 	}
 	err = cars.pool.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		q := cars.carsrp.Conn(c)
