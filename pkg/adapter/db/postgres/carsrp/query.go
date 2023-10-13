@@ -30,6 +30,11 @@ func (gc *gCar) Model() *model.Car {
 	}
 }
 
+// UnparkAndMove example operation unparks a car with carID UUID,
+// and moves it to the c destination coordinate. Updated car model
+// and possible errors are returned.
+// This generic function allows a unified implementation to be used
+// for both of the connection and transaction receiving methods.
 func UnparkAndMove[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID, c model.Coordinate) (*model.Car, error) {
 	gdb := q.GORM(ctx)
 	var gc []gCar
@@ -52,6 +57,11 @@ func UnparkAndMove[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID
 	return gc[0].Model(), nil
 }
 
+// Park example operation parks the car with carID UUID without
+// changing its current location. It returns the updated can model
+// and possible errors.
+// This generic function allows a unified implementation to be used
+// for both of the connection and transaction receiving methods.
 func Park[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID) (*model.Car, error) {
 	gdb := q.GORM(ctx)
 	var gc []gCar

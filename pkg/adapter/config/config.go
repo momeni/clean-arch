@@ -1,3 +1,15 @@
+// Package config is an adapter which allows users to write a yaml
+// configuration file and allow the caweb to instantiate different
+// components, from the adapter or use cases layers, using those
+// configuration settings.
+// These settings may be versioned and maintained by migrations later.
+// However, the parsed and validated configurations should be passed
+// to their ultimate components as a series of individual params (for
+// the mandatory items) and a series of functional options (for
+// the optional items), so they may be accumulated and validated
+// in another (possibly non-exorted) config struct (or directly in the
+// relevant end-component such as a UseCase instance). This design
+// decision causes a bit of redundancy in favor of a defensive solution.
 package config
 
 import (
@@ -28,14 +40,17 @@ type Config struct {
 	Usecases Usecases
 }
 
+// Database contains the database related configuration settigns.
 type Database struct {
-	Host     string
-	Port     int
-	Name     string
-	Role     string
-	PassFile string `yaml:"pass-file"`
+	Host     string // domain name or IP address of the DBMS server
+	Port     int    // port number of the DBMS server
+	Name     string // database name, like caweb1_0_0
+	Role     string // role/username for connecting to the database
+	PassFile string `yaml:"pass-file"` // path of the password file
 }
 
+// NewPool instantiates a new database connection pool based on the
+// connection information which are stored in d instance.
 func (d Database) NewPool(ctx context.Context) (*postgres.Pool, error) {
 	pass, err := os.ReadFile(d.PassFile)
 	if err != nil {
@@ -54,11 +69,14 @@ func (d Database) NewPool(ctx context.Context) (*postgres.Pool, error) {
 	return p, nil
 }
 
+// Gin contains the gin-gonic related configuration settings.
 type Gin struct {
-	Logger   bool
-	Recovery bool
+	Logger   bool // Whether to register the gin.Logger() middleware
+	Recovery bool // Whether to register the gin.Recovery() middleware
 }
 
+// NewEngine instantiates a new gin-gonic engine instance based on
+// the g settings.
 func (g Gin) NewEngine() *gin.Engine {
 	middlewares := make([]gin.HandlerFunc, 0, 2)
 	if g.Logger {
@@ -70,14 +88,20 @@ func (g Gin) NewEngine() *gin.Engine {
 	return gin.New(middlewares...)
 }
 
+// Usecases contains the configuration settings for all use cases.
 type Usecases struct {
-	Cars Cars
+	Cars Cars // cars use cases related settings
 }
 
+// Cars contains the configuration settings for the cars use cases.
 type Cars struct {
+	// OldParkingDelay indicates the amount of delay that an old
+	// parking method should incur.
 	OldParkingDelay *time.Duration `yaml:"old-parking-method-delay"`
 }
 
+// NewUseCase instantiates a new cars use case based on the settings
+// in the c struct.
 func (c Cars) NewUseCase(
 	p repo.Pool, r repo.Cars,
 ) (*carsuc.UseCase, error) {
@@ -91,6 +115,8 @@ func (c Cars) NewUseCase(
 	return carsuc.New(p, r, opts...)
 }
 
+// Load function loads, validates, and normalizes the configuration
+// file and returns its settings as an instance of the Config struct.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

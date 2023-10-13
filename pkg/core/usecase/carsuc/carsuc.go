@@ -1,3 +1,7 @@
+// Package carsuc contains the cars UseCase which supports the
+// cars related use cases. Currently, two uses cases are supported:
+//  1. Riding a car,
+//  2. Parking a car.
 package carsuc
 
 import (
@@ -11,6 +15,9 @@ import (
 	"github.com/momeni/clean-arch/pkg/core/repo"
 )
 
+// UseCase represents a cars use case. It holds a database connection
+// pool, the cars repository instance (to be guided with the DB pool),
+// and the cars use case specific settings.
 type UseCase struct {
 	pool   repo.Pool
 	carsrp repo.Cars
@@ -38,6 +45,9 @@ func New(p repo.Pool, c repo.Cars, opts ...Option) (*UseCase, error) {
 	return uc, nil
 }
 
+// Ride use case unparks the cid car and moves it to the given
+// destination geographical location. Updated car model and
+// possible errors are returned.
 func (cars *UseCase) Ride(ctx context.Context, cid uuid.UUID, destination model.Coordinate) (car *model.Car, err error) {
 	err = cars.pool.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		q := cars.carsrp.Conn(c)
@@ -50,6 +60,10 @@ func (cars *UseCase) Ride(ctx context.Context, cid uuid.UUID, destination model.
 	return
 }
 
+// Park use case tries to park the cid car using the mode parking mode.
+// The new parking mode works quickly while the old method incurs delay
+// based on the configuration. It returns the updated car model and
+// possible errors.
 func (cars *UseCase) Park(ctx context.Context, cid uuid.UUID, mode model.ParkingMode) (car *model.Car, err error) {
 	err = mode.Validate()
 	if err != nil {

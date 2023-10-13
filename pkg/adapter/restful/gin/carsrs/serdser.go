@@ -17,6 +17,8 @@ type rawCarUpdateReq struct {
 	Mode string         `form:"mode" binding:"omitempty,oneof=old new"`
 }
 
+// StrCoordinate is a string-based representation (instead of a numberic
+// representation) of a geographical location.
 type StrCoordinate struct {
 	Lat string `form:"lat" binding:"required,latitude"`
 	Lon string `form:"lon" binding:"required,longitude"`
@@ -29,6 +31,11 @@ type carUpdateReq struct {
 	Mode  model.ParkingMode
 }
 
+// ToModel method converts a StrCoordinate to a model.Coordinate struct
+// instance. Existence of this method allows all conversion codes to
+// rely on exactly one implementation, so all fields should be listed
+// here (and if some of them were missed after an update, fixing one
+// place is enough to restore the whole project's sanity again).
 func (sc StrCoordinate) ToModel() (c model.Coordinate, err error) {
 	c.Lat, err = strconv.ParseFloat(sc.Lat, 64)
 	if err != nil {

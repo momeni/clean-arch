@@ -5,12 +5,17 @@ import (
 	"fmt"
 )
 
+// ParkingMode specifies the parking mode enum and accepts two
+// old and new methods. Although this enum is numeric, it is
+// (de)serialized as a string for readability in the adapter layer.
 type ParkingMode int
 
+// Valid values for the ParkingMode enum.
 const (
-	ParkingModeInvalid ParkingMode = iota
-	ParkingModeOld
-	ParkingModeNew
+	ParkingModeInvalid ParkingMode = iota // zero value is invalid
+
+	ParkingModeOld // old method incurs more delay
+	ParkingModeNew // new method parks the car with no delay
 )
 
 // ErrUnknownParkingMode indicates that a given string may not be parsed
@@ -41,10 +46,14 @@ var ErrUnknownParkingMode = errors.New("unknown parking mode")
 // be wrapped and returned by error like this.
 type ParkingModeError int
 
+// Error implements the error interface, returning a string
+// representation of the ParkingModeError.
 func (e ParkingModeError) Error() string {
 	return fmt.Sprintf("invalid parking mode: %d", e)
 }
 
+// Validate returns nil if ParkingMode value is valid. For invalid
+// values, an instance of the ParkingModeError will be returned.
 func (p ParkingMode) Validate() error {
 	switch p {
 	case ParkingModeOld, ParkingModeNew:
@@ -54,6 +63,9 @@ func (p ParkingMode) Validate() error {
 	}
 }
 
+// String converts the ParkingMode enum to a string, helping to
+// serialize it for transmision to web clients (for improved
+// readability). Invalid parking mode causes a panic.
 func (p ParkingMode) String() string {
 	switch p {
 	case ParkingModeOld:
@@ -65,6 +77,10 @@ func (p ParkingMode) String() string {
 	}
 }
 
+// ParseParkingMode parses the given string and returns a ParkingMode,
+// helping to deserialize it when reading a REST API request.
+// For invalid strings, ParkingModeInvalid and ErrUnknownParkingMode
+// will be returned.
 func ParseParkingMode(p string) (ParkingMode, error) {
 	switch p {
 	case "old":

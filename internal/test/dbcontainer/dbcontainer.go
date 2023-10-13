@@ -1,3 +1,9 @@
+// Package dbcontainer is an internal helper for the test packages.
+// This packages facilitates creation of a temporary postgres:16
+// podman container and connecting to it, using a *postgres.Pool
+// connection pool.
+// It may be used in all integration-level test suites which require
+// a real PostgreSQL DBMS server.
 package dbcontainer
 
 import (
@@ -13,6 +19,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// New creates and starts up a postgres podman container.
+// The podman.service needs to be started and the DOCKER_HOST
+// environment variable needs to be initialized beforehand like
+// DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
+// in order to be identified by this function properly.
+// The ctx will be used during the container start up and shutdown,
+// while the timeout will be considered only during the start up phase.
 func New(ctx context.Context, timeout time.Duration, t *testing.T) (
 	pg *sqltestutil.PostgresContainer,
 	pool *postgres.Pool,

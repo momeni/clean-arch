@@ -1,3 +1,4 @@
+// Package main is the main entry point of the clean-arch web project.
 package main
 
 import (
