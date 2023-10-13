@@ -1,0 +1,1 @@
+../../../../../assets/database/schema.sql
