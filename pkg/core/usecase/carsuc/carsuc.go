@@ -1,3 +1,8 @@
+// Copyright (c) 2023 Behnam Momeni
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Package carsuc contains the cars UseCase which supports the
 // cars related use cases. Currently, two uses cases are supported:
 //  1. Riding a car,

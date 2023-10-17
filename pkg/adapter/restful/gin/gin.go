@@ -1,3 +1,8 @@
+// Copyright (c) 2023 Behnam Momeni
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Package gin wraps the gin-gonic web framework and lists the
 // middlewares which are expected to be enabled/disabled by the
 // configuration settings.

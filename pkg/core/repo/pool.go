@@ -1,3 +1,8 @@
+// Copyright (c) 2023 Behnam Momeni
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Package repo specifies the expected interfaces for management
 // of repositories, including a database connections pool which can
 // be used concurrently by several goroutines, how individual
