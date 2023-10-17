@@ -29,7 +29,7 @@ type Pool struct {
 	*gorm.DB
 }
 
-// NewPool instances a connection pool using the url connection string.
+// NewPool instantiates a connection pool using a url connection string.
 func NewPool(ctx context.Context, url string) (*Pool, error) {
 	gdb, err := gorm.Open(postgres.Open(url), &gorm.Config{})
 	if err != nil {

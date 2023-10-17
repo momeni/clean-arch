@@ -75,7 +75,7 @@ func Assert(errs *map[string][]string, ok bool, name string, msgs ...string) boo
 // SerErr serializes the err error and transmits it as a JSON object
 // with "detail" field containing the err string representation.
 // If err is a *cerr.Error object, its HTTPStatusCode will be used for
-// transmision of the error.
+// transmission of the error.
 // Otherwise, a 500 response will be sent.
 func SerErr(c *gin.Context, err error) {
 	var ce *cerr.Error

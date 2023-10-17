@@ -45,7 +45,7 @@ type Config struct {
 	Usecases Usecases
 }
 
-// Database contains the database related configuration settigns.
+// Database contains the database related configuration settings.
 type Database struct {
 	Host     string // domain name or IP address of the DBMS server
 	Port     int    // port number of the DBMS server

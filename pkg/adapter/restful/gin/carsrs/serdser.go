@@ -22,7 +22,7 @@ type rawCarUpdateReq struct {
 	Mode string         `form:"mode" binding:"omitempty,oneof=old new"`
 }
 
-// StrCoordinate is a string-based representation (instead of a numberic
+// StrCoordinate is a string-based representation (instead of a numeric
 // representation) of a geographical location.
 type StrCoordinate struct {
 	Lat string `form:"lat" binding:"required,latitude"`

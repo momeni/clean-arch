@@ -69,7 +69,7 @@ func (p ParkingMode) Validate() error {
 }
 
 // String converts the ParkingMode enum to a string, helping to
-// serialize it for transmision to web clients (for improved
+// serialize it for transmission to web clients (for improved
 // readability). Invalid parking mode causes a panic.
 func (p ParkingMode) String() string {
 	switch p {

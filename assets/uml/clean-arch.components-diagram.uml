@@ -1,0 +1,42 @@
+@startuml
+'!theme blueprint
+'!theme crt-green
+!theme vibrant
+
+component "Frameworks / DB / Web / Libraries" as libs {
+  class "Gin Gonic" as gin
+  class "GORM / Pgx" as db
+}
+component "Adapters / Controllers / Gateways" as adapter {
+  class "carsrs.resource" as car_rs
+  class "carsrp.Repo" as car_orm
+}
+component "Use Cases / Interactors" as uc {
+  class "carsuc.UseCase" as car_uc
+  interface "repo.Cars" as car_repo
+
+  car_uc -down-> car_repo : use cases may\nuse libraries indirectly\nvia interfaces which\ndefine their abstract expectations
+}
+component "Models / Entities / Domain" as model {
+  entity "Car" as car_model
+}
+
+note right of libs
+  Third-party libraries and framework compose distinct subsystems
+  which may follow Clean Architecture and expose their functionalities
+  to be used by the adapter layer or require specific interfaces (just
+  like our use cases layer which requires repo interfaces) in order to
+  indirectly use components from our subsystem. So it is technically a
+  parallel to the use cases layer from another subsystem, not above the
+  adapter layer (and its code may be maintained by independent teams).
+end note
+
+adapter -> uc : adapters adapt the\nbusiness-level implementation of use cases layer\nto the technology-dependent implementation\nof 3rd-party libraries
+uc -> model : use cases layer\ndepends on the models for\nits core business domain data types\nreceiving and operating on\nexisting instances or\ncreating them in response to\nincoming requests
+adapter ----> model : adapters may use entity models\nas input/output for\nthe use cases layer
+car_rs -up-> gin : adapters employ 3rd-party libraries for\ninteraction with other systems\nlike handling of web requests
+car_rs -down-> car_uc : adapters depend on\nuse cases layer for\nactual handling of requests\nafter converting req/resp to/from\ntheir expected interfaces
+car_orm -up-> db : adapters realize DB interactions\nusing libraries
+car_orm ...> car_repo : <<realizes>>\nadapter layer implementation\nof DB operations\nis exposed in terms of\nuse cases layer repo interfaces\nto be used indirectly
+
+@enduml

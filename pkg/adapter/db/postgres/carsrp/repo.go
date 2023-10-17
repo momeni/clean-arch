@@ -24,7 +24,7 @@ type Repo struct {
 // New instantiates a cars Repo struct. Although this New does not
 // perform complex operations, and users may use &carsrp.Repo{} directly
 // too, but this method improves the code readability as carsrp.New()
-// making the package to look alike a data type.
+// makes the package to look alike a data type.
 func New() *Repo {
 	return &Repo{}
 }
