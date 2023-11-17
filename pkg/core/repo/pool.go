@@ -32,4 +32,8 @@ type Pool interface {
 	// The ctx which is used for acquisition of a connection is also
 	// passed to the handler function.
 	Conn(ctx context.Context, handler ConnHandler) error
+
+	// Close closes all connections of this connection pool and returns
+	// any occurred error.
+	Close() error
 }

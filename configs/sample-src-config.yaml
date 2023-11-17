@@ -1,0 +1,21 @@
+# Copyright (c) 2024 Behnam Momeni
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+---
+database:
+  host: 127.0.0.1
+  port: 5455
+  name: caweb1_0_0
+  role: caweb
+  pass-file: dist/.db/caweb1_0_0/caweb.pass
+gin:
+  logger: true
+  recovery: true
+usecases:
+  cars:
+    old-parking-method-delay: 15s
+versions:
+  database: 1.0.0
+  config: 1.0.0

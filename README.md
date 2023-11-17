@@ -86,7 +86,7 @@ their own project.
 As user requirements evolve, software products need to be changed so
 they can address the updated requirements. Ideally, changes are limited
 to one file or package and their side-effects can be restricted easily.
-However, in practice changes may propagate accross packages and modules
+However, in practice changes may propagate across packages and modules
 and reach to other components. In order to manage these changes, it is
 required to detect them and all components which may be affected by them
 so their required changes may be planned whenever their dependencies are
@@ -192,7 +192,7 @@ A multi-database migration consists of the following main steps:
      foreign server and its user mapping (if any), create the normal
      user if it is missing, create all required schema (as identified by
      and in the same order which is specified by step 5), grant their
-     CREATE privilege to the normal user in addition to the USAGE
+     complete privileges to the normal user in addition to the USAGE
      privilege of the `postgres_fdw` extension, and finally renew the
      admin and normal user roles passwords.
      Thereafter, using the normal user of the dst database, create a
@@ -221,6 +221,16 @@ A multi-database migration consists of the following main steps:
          the step 9 (since before that step, database contents are not
          committed and only empty schema are created),
            * Jump to step 10 in this scenario,
+       - Atomically update the admin and normal roles password values
+         in the dst database,
+           * Generate new passwords and write them in a temp file like
+             the .pgpass.new file,
+           * Alter both passwords in a transaction,
+           * Move the new passwords file over the old one,
+           * In case of resumption, try both passwords files in order to
+             find which one works correctly, remove the other file and
+             move the correct file so .pgpass file works, then continue
+             with generation of a new .pgpass.new file and so on,
   7. Using the normal user, connect to the dst database and perform the
      database migration in one transaction (this step finishes while the
      transaction is still open and ready to be committed),

@@ -17,10 +17,11 @@ import (
 )
 
 type gCar struct {
-	CID        uuid.UUID `gorm:"primaryKey;type:uuid;column:cid"`
-	Name       string
-	Coordinate model.Coordinate `gorm:"embedded"`
-	Parked     bool
+	CID         uuid.UUID `gorm:"primaryKey;type:uuid;column:cid"`
+	Name        string
+	Coordinate  model.Coordinate `gorm:"embedded"`
+	Parked      bool
+	ParkingMode *string
 }
 
 func (gc *gCar) TableName() string {
@@ -44,12 +45,13 @@ func UnparkAndMove[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID
 	gdb := q.GORM(ctx)
 	var gc []gCar
 	gdb.Model(&gc).Clauses(clause.Returning{}).Select(
-		"lat", "lon", "parked",
+		"lat", "lon", "parked", "parking_mode",
 	).Where(
 		"cid=?", carID,
 	).Updates(gCar{
-		Coordinate: c,
-		Parked:     false,
+		Coordinate:  c,
+		Parked:      false,
+		ParkingMode: nil,
 	})
 	if err := gdb.Error; err != nil {
 		return nil, fmt.Errorf("query: %w", err)
@@ -63,19 +65,23 @@ func UnparkAndMove[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID
 }
 
 // Park example operation parks the car with carID UUID without
-// changing its current location. It returns the updated can model
-// and possible errors.
+// changing its current location. It returns the updated car model
+// and possible errors. The parking mode is recorded too.
 // This generic function allows a unified implementation to be used
 // for both of the connection and transaction receiving methods.
-func Park[Q postgres.Queryer](ctx context.Context, q Q, carID uuid.UUID) (*model.Car, error) {
+func Park[Q postgres.Queryer](
+	ctx context.Context, q Q, carID uuid.UUID, mode model.ParkingMode,
+) (*model.Car, error) {
 	gdb := q.GORM(ctx)
 	var gc []gCar
+	modeStr := mode.String()
 	gdb.Model(&gc).Clauses(clause.Returning{}).Select(
-		"parked",
+		"parked", "parking_mode",
 	).Where(
 		"cid=?", carID,
 	).Updates(gCar{
-		Parked: true,
+		Parked:      true,
+		ParkingMode: &modeStr,
 	})
 	if err := gdb.Error; err != nil {
 		return nil, fmt.Errorf("query: %w", err)

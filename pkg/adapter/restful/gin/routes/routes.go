@@ -12,10 +12,10 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/momeni/clean-arch/pkg/adapter/config"
-	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
+	"github.com/momeni/clean-arch/pkg/adapter/config/cfg2"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/carsrp"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/carsrs"
+	"github.com/momeni/clean-arch/pkg/core/repo"
 )
 
 // Register instantiates relevant repositories and use cases based on
@@ -30,7 +30,7 @@ import (
 // interfaces with the REST APIs. These resources are registered as
 // request handlers using the e gin-gonic engine instance.
 // Possible errors will be returned after possible wrapping.
-func Register(e *gin.Engine, p *postgres.Pool, c config.Usecases) error {
+func Register(e *gin.Engine, p repo.Pool, c cfg2.Usecases) error {
 	carsRepo := carsrp.New()
 
 	carsUseCase, err := c.Cars.NewUseCase(p, carsRepo)

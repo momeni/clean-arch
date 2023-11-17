@@ -56,13 +56,14 @@ func (cq connQueryer) UnparkAndMove(ctx context.Context, carID uuid.UUID, c mode
 }
 
 // Park example operation parks the car with carID UUID without
-// changing its current location. It returns the updated can model
+// changing its current location. It returns the updated car model
 // and possible errors.
+// The parking mode is recorded too.
 // This method calls a generic function, so the actual implementation
 // can be coded at one place for both of the connection and transaction
 // receiving methods.
-func (cq connQueryer) Park(ctx context.Context, carID uuid.UUID) (*model.Car, error) {
-	return Park(ctx, cq.Conn, carID)
+func (cq connQueryer) Park(ctx context.Context, carID uuid.UUID, mode model.ParkingMode) (*model.Car, error) {
+	return Park(ctx, cq.Conn, carID, mode)
 }
 
 type txQueryer struct {
@@ -92,11 +93,11 @@ func (tq txQueryer) UnparkAndMove(ctx context.Context, carID uuid.UUID, c model.
 }
 
 // Park example operation parks the car with carID UUID without
-// changing its current location. It returns the updated can model
-// and possible errors.
+// changing its current location. It returns the updated car model
+// and possible errors. The parking mode is recorded too.
 // This method calls a generic function, so the actual implementation
 // can be coded at one place for both of the connection and transaction
 // receiving methods.
-func (tq txQueryer) Park(ctx context.Context, carID uuid.UUID) (*model.Car, error) {
-	return Park(ctx, tq.Tx, carID)
+func (tq txQueryer) Park(ctx context.Context, carID uuid.UUID, mode model.ParkingMode) (*model.Car, error) {
+	return Park(ctx, tq.Tx, carID, mode)
 }

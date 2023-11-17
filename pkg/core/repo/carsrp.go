@@ -51,9 +51,10 @@ type CarsQueryer interface {
 	UnparkAndMove(ctx context.Context, carID uuid.UUID, c model.Coordinate) (*model.Car, error)
 
 	// Park example operation parks the car with carID UUID without
-	// changing its current location. It returns the updated can model
+	// changing its current location. It returns the updated car model
 	// and possible errors.
-	Park(ctx context.Context, carID uuid.UUID) (*model.Car, error)
+	// The parking mode is recorded too.
+	Park(ctx context.Context, carID uuid.UUID, mode model.ParkingMode) (*model.Car, error)
 }
 
 // Cars interface represents an example repository for management of

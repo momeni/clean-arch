@@ -20,7 +20,8 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/momeni/clean-arch/internal/test/dbcontainer"
-	"github.com/momeni/clean-arch/pkg/adapter/config"
+	"github.com/momeni/clean-arch/pkg/adapter/config/cfg2"
+	"github.com/momeni/clean-arch/pkg/adapter/config/settings"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/routes"
@@ -67,10 +68,10 @@ func (igts *IntegrationGinTestSuite) SetupSuite() {
 
 	igts.Gin = gin.New(gin.Logger(), gin.Recovery())
 	igts.Require().NotNil(igts.Gin, "cannot instantiate Gin engine")
-	delay := 2 * time.Second
-	err = routes.Register(igts.Gin, igts.Pool, config.Usecases{
-		Cars: config.Cars{
-			OldParkingDelay: &delay,
+	delay := settings.Duration(2 * time.Second)
+	err = routes.Register(igts.Gin, igts.Pool, cfg2.Usecases{
+		Cars: cfg2.Cars{
+			DelayOfOPM: &delay,
 		},
 	})
 	igts.Require().NoError(err, "failed to register Gin routes")

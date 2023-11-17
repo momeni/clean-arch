@@ -14,6 +14,10 @@ integration-tests:
 	DOCKER_HOST=unix://$$XDG_RUNTIME_DIR/podman/podman.sock \
 	go test ./pkg/adapter/restful/gin -run TestIntegration
 
+.PHONY: config-test
+config-test:
+	go test ./pkg/adapter/config/...
+
 .PHONY: install-staticcheck install-revive revive lint
 install-staticcheck:
 	go install honnef.co/go/tools/cmd/staticcheck@2023.1.6
@@ -31,6 +35,7 @@ lint:
 SRC_DB_DIR := dist/.db/caweb1_0_0
 .PHONY: src-db src-db-psql
 src-db: $(SRC_DB_DIR)/caweb.pass
+	podman start caweb1_0_0-pg16-dbms
 
 $(SRC_DB_DIR)/caweb.pass:
 	adminpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
@@ -56,6 +61,7 @@ src-db-psql: src-db
 DST_DB_DIR := dist/.db/caweb1_1_0
 .PHONY: dst-db dst-db-psql
 dst-db: $(DST_DB_DIR)/caweb.pass
+	podman start caweb1_1_0-pg16-dbms
 
 $(DST_DB_DIR)/caweb.pass:
 	adminpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
@@ -77,3 +83,7 @@ $(DST_DB_DIR)/caweb.pass:
 dst-db-psql: dst-db
 	PGPASSFILE=$(DST_DB_DIR)/caweb.pass \
 		psql -h 127.0.0.1 -p 5456 -U admin -d caweb1_1_0
+
+.PHONY: grep
+grep:
+	grep -R --exclude-dir=.git --exclude-dir=dist ${ARGS} .

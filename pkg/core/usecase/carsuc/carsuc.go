@@ -79,7 +79,7 @@ func (cars *UseCase) Park(ctx context.Context, cid uuid.UUID, mode model.Parking
 	}
 	err = cars.pool.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		q := cars.carsrp.Conn(c)
-		car, err = q.Park(ctx, cid)
+		car, err = q.Park(ctx, cid, mode)
 		return err
 	})
 	if err != nil {
