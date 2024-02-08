@@ -62,13 +62,31 @@ type Config struct {
 func (c *Config) ConnectionPool(
 	ctx context.Context, r repo.Role,
 ) (repo.Pool, error) {
-	return c.Database.ConnectionPool(ctx, r)
+	p, err := c.Database.ConnectionPool(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%#v.ConnectionPool: %w", c.Database, err,
+		)
+	}
+	return p, nil
 }
 
 // ConnectionInfo returns the host, port, and database name of the
 // connection information which are kept in this Config instance.
 func (c *Config) ConnectionInfo() (dbName, host string, port int) {
 	return c.Database.ConnectionInfo()
+}
+
+// NewSchemaRepo instantiates a fresh Schema repository.
+// Role names may be optionally suffixed based on the settings and
+// in that case, repo.Role role names which are passed to the
+// ConnectionPool method or RenewPasswords will be suffixed
+// automatically. Since the Schema repository has methods for
+// creation of roles or asking to grant specific privileges to
+// them, it needs to obtain the same role name suffix (as stored
+// in the current SchemaSettings instance).
+func (c *Config) NewSchemaRepo() repo.Schema {
+	return c.Database.NewSchemaRepo()
 }
 
 // SchemaMigrator creates a repo.Migrator[repo.SchemaSettler] instance
@@ -222,6 +240,9 @@ func (c *Config) ValidateAndNormalize() error {
 	settings.Nil2Zero(&c.Gin.Recovery)
 	// No need to check for c.Usecases.Cars.DelayOfOPM == nil
 	// because it has no default in adapters layer.
+	if err := c.Database.ValidateAndNormalize(); err != nil {
+		return fmt.Errorf("validating database settings: %w", err)
+	}
 	return nil
 }
 

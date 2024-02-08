@@ -18,6 +18,21 @@ integration-tests:
 config-test:
 	go test ./pkg/adapter/config/...
 
+.PHONY: mig-tests
+mig-tests:
+	if [ ! -s $$XDG_RUNTIME_DIR/podman/podman.sock ]; then \
+		systemctl --user start podman.service; \
+	fi && \
+	DOCKER_HOST=unix://$$XDG_RUNTIME_DIR/podman/podman.sock \
+	go test ./pkg/core/usecase/migrationuc
+
+.PHONY: scram-test
+scram-test:
+	go test ./pkg/adapter/hash/scram
+
+.PHONY: test
+test: config-test integration-tests mig-tests scram-test
+
 .PHONY: install-staticcheck install-revive revive lint
 install-staticcheck:
 	go install honnef.co/go/tools/cmd/staticcheck@2023.1.6

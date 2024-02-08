@@ -13,23 +13,35 @@ import (
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/scram"
 )
 
 // Repo represents a schema management repository.
 type Repo struct {
+	roleSuffix repo.Role
+	hasher     scram.Hasher
 }
 
-// New instantiates a schema management Repo struct. Although this New
-// function does not perform complex operations, and users may use
-// a &schemarp.Repo{} directly too, but this method improves the code
-// readability as schemarp.New() makes the package to look alike a
-// data type.
-func New() *Repo {
-	return &Repo{}
+// New instantiates a schema management Repo struct.
+// This method improves the caller code readability as schemarp.New
+// makes this package to look alike a data type.
+// The `roleSuffix` which may be empty specifies a suffix for role
+// names. The CreateRoleIfNotExists, GrantPrivileges, SetSearchPath,
+// GrantFDWUsage, and ChangePasswords will append it to their role
+// arguments.
+//
+// The `h` SCRAM hasher will be included in the returned *Repo instance
+// so it may hash database role passwords properly. This hasher must
+// conform with the configured format in the DBMS, otherwise, the
+// passwords which are created may not be used for authentication.
+func New(roleSuffix repo.Role, h scram.Hasher) *Repo {
+	return &Repo{roleSuffix, h}
 }
 
 type connQueryer struct {
 	*postgres.Conn
+
+	roleSuffix repo.Role
 }
 
 // Conn unwraps the given repo.Conn instance, expecting to find an
@@ -59,7 +71,7 @@ type connQueryer struct {
 // affect multiple user roles.
 func (schema *Repo) Conn(c repo.Conn) repo.SchemaConnQueryer {
 	cc := c.(*postgres.Conn)
-	return connQueryer{Conn: cc}
+	return connQueryer{Conn: cc, roleSuffix: schema.roleSuffix}
 }
 
 // InstallFDWExtensionIfMissing creates the postgres_fdw extension
@@ -126,19 +138,25 @@ func (cq connQueryer) CreateSchema(
 // The ChangePasswords method may be used for setting a password if
 // desired. Otherwise, that user may not login effectively (but
 // using the trust or local identity methods).
+//
+// The `role` role name may be suffixed automatically based on
+// this connection queryer settings.
 func (cq connQueryer) CreateRoleIfNotExists(
 	ctx context.Context, role repo.Role,
 ) error {
-	return CreateRoleIfNotExists(ctx, cq.Conn, role)
+	return CreateRoleIfNotExists(ctx, cq.Conn, cq.roleSuffix, role)
 }
 
 // GrantPrivileges grants ALL privileges on the `schema` schema
 // to the `role` role, so it may create or access tables in that schema
 // and run relevant queries.
+//
+// The `role` role name may be suffixed automatically based on
+// this connection queryer settings.
 func (cq connQueryer) GrantPrivileges(
 	ctx context.Context, schema string, role repo.Role,
 ) error {
-	return GrantPrivileges(ctx, cq.Conn, schema, role)
+	return GrantPrivileges(ctx, cq.Conn, cq.roleSuffix, schema, role)
 }
 
 // SetSearchPath alters the given database role and sets its default
@@ -153,14 +171,20 @@ func (cq connQueryer) SetSearchPath(
 // extension to the `role` role. Thereafter, that `role` role can use
 // the postgres_fdw extension in order to create a foreign server or
 // create a user mapping for it.
+//
+// The `role` role name may be suffixed automatically based on
+// this connection queryer settings.
 func (cq connQueryer) GrantFDWUsage(
 	ctx context.Context, role repo.Role,
 ) error {
-	return GrantFDWUsage(ctx, cq.Conn, role)
+	return GrantFDWUsage(ctx, cq.Conn, cq.roleSuffix, role)
 }
 
 type txQueryer struct {
 	*postgres.Tx
+
+	roleSuffix repo.Role
+	hasher     scram.Hasher
 }
 
 // Tx unwraps the given repo.Tx instance, expecting to find an instance
@@ -183,7 +207,11 @@ type txQueryer struct {
 // point of commitment.
 func (schema *Repo) Tx(tx repo.Tx) repo.SchemaTxQueryer {
 	tt := tx.(*postgres.Tx)
-	return txQueryer{Tx: tt}
+	return txQueryer{
+		Tx:         tt,
+		roleSuffix: schema.roleSuffix,
+		hasher:     schema.hasher,
+	}
 }
 
 // DropIfExists drops the `schema` schema without cascading if it
@@ -225,19 +253,25 @@ func (tq txQueryer) CreateSchema(
 // The ChangePasswords method may be used for setting a password if
 // desired. Otherwise, that user may not login effectively (but
 // using the trust or local identity methods).
+//
+// The `role` role name may be suffixed automatically based on
+// this transaction queryer settings.
 func (tq txQueryer) CreateRoleIfNotExists(
 	ctx context.Context, role repo.Role,
 ) error {
-	return CreateRoleIfNotExists(ctx, tq.Tx, role)
+	return CreateRoleIfNotExists(ctx, tq.Tx, tq.roleSuffix, role)
 }
 
 // GrantPrivileges grants ALL privileges on the `schema` schema
 // to the `role` role, so it may create or access tables in that schema
 // and run relevant queries.
+//
+// The `role` role name may be suffixed automatically based on
+// this transaction queryer settings.
 func (tq txQueryer) GrantPrivileges(
 	ctx context.Context, schema string, role repo.Role,
 ) error {
-	return GrantPrivileges(ctx, tq.Tx, schema, role)
+	return GrantPrivileges(ctx, tq.Tx, tq.roleSuffix, schema, role)
 }
 
 // SetSearchPath alters the given database role and sets its default
@@ -252,10 +286,13 @@ func (tq txQueryer) SetSearchPath(
 // extension to the `role` role. Thereafter, that `role` role can use
 // the postgres_fdw extension in order to create a foreign server or
 // create a user mapping for it.
+//
+// The `role` role name may be suffixed automatically based on
+// this transaction queryer settings.
 func (tq txQueryer) GrantFDWUsage(
 	ctx context.Context, role repo.Role,
 ) error {
-	return GrantFDWUsage(ctx, tq.Tx, role)
+	return GrantFDWUsage(ctx, tq.Tx, tq.roleSuffix, role)
 }
 
 // ChangePasswords updates the passwords of the given roles in the
@@ -266,8 +303,13 @@ func (tq txQueryer) GrantFDWUsage(
 // all items are initialized explicitly in constrast to a struct
 // which its fields can be zero-initialized and are more suitable
 // to pass a set of optional fields.
+//
+// The `roles` role names may be suffixed automatically based on
+// this transaction queryer settings.
 func (tq txQueryer) ChangePasswords(
 	ctx context.Context, roles []repo.Role, passwords []string,
 ) error {
-	return ChangePasswords(ctx, tq.Tx, roles, passwords)
+	return ChangePasswords(
+		ctx, tq.Tx, tq.roleSuffix, tq.hasher, roles, passwords,
+	)
 }

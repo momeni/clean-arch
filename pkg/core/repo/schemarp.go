@@ -142,6 +142,8 @@ type SchemaTxQueryer interface {
 	// all items are initialized explicitly in constrast to a struct
 	// which its fields can be zero-initialized and are more suitable
 	// to pass a set of optional fields.
+	// The given roles may be suffixed automatically too, based on
+	// this transaction queryer settings.
 	ChangePasswords(
 		ctx context.Context, roles []Role, passwords []string,
 	) error
@@ -184,11 +186,17 @@ type SchemaQueryer interface {
 	// The ChangePasswords method may be used for setting a password if
 	// desired. Otherwise, that user may not login effectively (but
 	// using the trust or local identity methods).
+	//
+	// The `role` role name may be suffixed automatically based on
+	// this schema queryer settings.
 	CreateRoleIfNotExists(ctx context.Context, role Role) error
 
 	// GrantPrivileges grants ALL privileges on the `schema` schema
 	// to the `role` role, so it may create or access tables in that
 	// schema and run relevant queries.
+	//
+	// The `role` role name may be suffixed automatically based on
+	// this schema queryer settings.
 	GrantPrivileges(ctx context.Context, schema string, role Role) error
 
 	// SetSearchPath alters the given database role and sets its default
@@ -203,5 +211,8 @@ type SchemaQueryer interface {
 	// extension to the `role` role. Thereafter, that `role` role can
 	// use the postgres_fdw extension in order to create a foreign
 	// server or create a user mapping for it.
+	//
+	// The `role` role name may be suffixed automatically based on
+	// this schema queryer settings.
 	GrantFDWUsage(ctx context.Context, role Role) error
 }

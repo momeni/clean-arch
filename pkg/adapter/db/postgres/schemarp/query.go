@@ -10,6 +10,7 @@ import (
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/scram"
 )
 
 // InstallFDWExtensionIfMissing creates the postgres_fdw extension
@@ -76,8 +77,12 @@ func CreateSchema[Q postgres.Queryer](
 // The ChangePasswords method may be used for setting a password if
 // desired. Otherwise, that user may not login effectively (but
 // using the trust or local identity methods).
+//
+// The `role` role name may be suffixed by `roleSuffix` if it is not
+// empty. This is useful to have distinct role names if repo.Role
+// predefined constants are not desirable.
 func CreateRoleIfNotExists[Q postgres.Queryer](
-	ctx context.Context, q Q, role repo.Role,
+	ctx context.Context, q Q, roleSuffix repo.Role, role repo.Role,
 ) error {
 	panic("not implemented yet") // TODO: Implement
 }
@@ -85,8 +90,16 @@ func CreateRoleIfNotExists[Q postgres.Queryer](
 // GrantPrivileges grants ALL privileges on the `schema` schema
 // to the `role` role, so it may create or access tables in that schema
 // and run relevant queries.
+//
+// The `role` role name may be suffixed by `roleSuffix` if it is not
+// empty. This is useful to have distinct role names if repo.Role
+// predefined constants are not desirable.
 func GrantPrivileges[Q postgres.Queryer](
-	ctx context.Context, q Q, schema string, role repo.Role,
+	ctx context.Context,
+	q Q,
+	roleSuffix repo.Role,
+	schema string,
+	role repo.Role,
 ) error {
 	panic("not implemented yet") // TODO: Implement
 }
@@ -107,8 +120,12 @@ func SetSearchPath[Q postgres.Queryer](
 // extension to the `role` role. Thereafter, that `role` role can use
 // the postgres_fdw extension in order to create a foreign server or
 // create a user mapping for it.
+//
+// The `role` role name may be suffixed by `roleSuffix` if it is not
+// empty. This is useful to have distinct role names if repo.Role
+// predefined constants are not desirable.
 func GrantFDWUsage[Q postgres.Queryer](
-	ctx context.Context, q Q, role repo.Role,
+	ctx context.Context, q Q, roleSuffix repo.Role, role repo.Role,
 ) error {
 	panic("not implemented yet") // TODO: Implement
 }
@@ -121,9 +138,18 @@ func GrantFDWUsage[Q postgres.Queryer](
 // all items are initialized explicitly in constrast to a struct
 // which its fields can be zero-initialized and are more suitable
 // to pass a set of optional fields.
+//
+// The `roles` role names may be suffixed by `roleSuffix` if it is not
+// empty. This is useful to have distinct role names if repo.Role
+// predefined constants are not desirable.
+// The `hasher` will be used for hashing of the `passwords` before
+// sending them to the DBMS (so they may not leak in plaintext).
+// This SCRAM hasher format must conform with the DBMS expected format.
 func ChangePasswords(
 	ctx context.Context,
 	tx *postgres.Tx,
+	roleSuffix repo.Role,
+	hasher scram.Hasher,
 	roles []repo.Role,
 	passwords []string,
 ) error {

@@ -57,6 +57,16 @@ type SchemaSettings interface {
 	// information and connect to a database.
 	ConnectionInfo() (dbName, host string, port int)
 
+	// NewSchemaRepo instantiates a fresh Schema repository.
+	// Role names may be optionally suffixed based on the settings and
+	// in that case, repo.Role role names which are passed to the
+	// ConnectionPool method or RenewPasswords will be suffixed
+	// automatically. Since the Schema repository has methods for
+	// creation of roles or asking to grant specific privileges to
+	// them, it needs to obtain the same role name suffix (as stored
+	// in the current SchemaSettings instance).
+	NewSchemaRepo() repo.Schema
+
 	// SchemaMigrator creates a repo.Migrator[repo.SchemaSettler]
 	// instance which wraps the given transaction argument and can be
 	// used for (1) loading the source database schema information

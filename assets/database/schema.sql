@@ -5,10 +5,11 @@
 
 CREATE TABLE cars (
     cid uuid NOT NULL,
-    name text,
-    lat numeric,
-    lon numeric,
-    parked boolean
+    name text NOT NULL,
+    lat numeric NOT NULL,
+    lon numeric NOT NULL,
+    parked boolean NOT NULL,
+    parking_mode text
 );
 
 ALTER TABLE ONLY cars

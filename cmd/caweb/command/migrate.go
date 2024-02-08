@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/adapter/config"
-	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/schemarp"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 	"github.com/spf13/cobra"
 )
@@ -70,7 +69,7 @@ func migrate(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("loading %q config file: %w", dstCfgPath, err)
 	}
 	muc := migrationuc.NewMigrateDB(
-		mig, dstSettings, targetCfgPath, schemarp.New(), loadConfigFile,
+		mig, dstSettings, targetCfgPath, loadConfigFile,
 	)
 	err = muc.Migrate(ctx)
 	if err != nil {

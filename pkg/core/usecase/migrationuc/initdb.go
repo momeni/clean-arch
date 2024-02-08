@@ -24,13 +24,14 @@ type InitDBUseCase struct {
 // settings in order to find the target database connection information
 // and also create its schema initializer based on the expected database
 // semantic version.
-// The `schemarp` repo is used in order to drop and (re)create an empty
-// schema, create normal role, grant it privileges on the empty schema,
-// and renew passwords of admin and normal roles.
-func NewInitDB(ss SchemaSettings, schemarp repo.Schema) *InitDBUseCase {
+// The `repo.Schema` repo will be taken from the `ss` in order to be
+// used for dropping and (re)creating an empty schema, creating normal
+// role, granting it privileges on the empty schema, and renewing the
+// passwords of admin and normal roles.
+func NewInitDB(ss SchemaSettings) *InitDBUseCase {
 	return &InitDBUseCase{
 		schemaSettings: ss,
-		schemaRepo:     schemarp,
+		schemaRepo:     ss.NewSchemaRepo(),
 	}
 }
 

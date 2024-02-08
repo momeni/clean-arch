@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/adapter/config"
-	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/schemarp"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 	"github.com/spf13/cobra"
@@ -55,7 +54,7 @@ func initDev(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("mig.Settler(): %w", err)
 	}
-	muc := migrationuc.NewInitDB(ss, schemarp.New())
+	muc := migrationuc.NewInitDB(ss)
 	err = muc.InitDev(ctx)
 	if err != nil {
 		return fmt.Errorf("initializing DB with dev data: %w", err)

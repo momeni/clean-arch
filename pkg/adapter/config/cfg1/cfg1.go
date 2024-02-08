@@ -26,9 +26,12 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/config/vers"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration"
+	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/schemarp"
+	"github.com/momeni/clean-arch/pkg/adapter/hash/scram"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	scrami "github.com/momeni/clean-arch/pkg/core/scram"
 	"github.com/momeni/clean-arch/pkg/core/usecase/carsuc"
 	"gopkg.in/yaml.v3"
 )
@@ -70,6 +73,26 @@ type Database struct {
 	Port    int    // port number of the DBMS server
 	Name    string // database name, like caweb1_0_0
 	PassDir string `yaml:"pass-dir"` // path of the passwords dir
+
+	// RoleSuffix specifies a possibly empty suffix for the database
+	// role names. Normally, repo.AdminRole and repo.NormalRole roles
+	// are used. In the parallel test cases, it is required to create
+	// multiple non-colliding roles in the same database cluster and
+	// so having a unique (per test) role suffix helps with parallelism.
+	RoleSuffix repo.Role `yaml:"role-suffix,omitempty"`
+
+	// AuthMethod specifies the database authentication method name.
+	// This method indicates how passwords should be hashed and stored
+	// in the database, so they may be used by an authentication
+	// operation successfully.
+	// Currently, only scram-sha-1 and scram-sha-256 methods are
+	// supported. The scram-sha-256 is the default value.
+	AuthMethod string `yaml:"auth-method,omitempty"`
+
+	// hasher is instantiated based on the AuthMethod and is used by
+	// the NewSchemaRepo method, so Schema repo instances may hash
+	// passwords properly (as expected by the DBMS).
+	hasher scrami.Hasher `yaml:"-"`
 }
 
 // ConnectionPool creates a database connection pool using the
@@ -77,13 +100,31 @@ type Database struct {
 func (c *Config) ConnectionPool(
 	ctx context.Context, r repo.Role,
 ) (repo.Pool, error) {
-	return c.Database.ConnectionPool(ctx, r)
+	p, err := c.Database.ConnectionPool(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%#v.ConnectionPool: %w", c.Database, err,
+		)
+	}
+	return p, nil
 }
 
 // ConnectionInfo returns the host, port, and database name of the
 // connection information which are kept in this Config instance.
 func (c *Config) ConnectionInfo() (dbName, host string, port int) {
 	return c.Database.ConnectionInfo()
+}
+
+// NewSchemaRepo instantiates a fresh Schema repository.
+// Role names may be optionally suffixed based on the settings and
+// in that case, repo.Role role names which are passed to the
+// ConnectionPool method or RenewPasswords will be suffixed
+// automatically. Since the Schema repository has methods for
+// creation of roles or asking to grant specific privileges to
+// them, it needs to obtain the same role name suffix (as stored
+// in the current SchemaSettings instance).
+func (c *Config) NewSchemaRepo() repo.Schema {
+	return c.Database.NewSchemaRepo()
 }
 
 // SchemaMigrator creates a repo.Migrator[repo.SchemaSettler] instance
@@ -176,6 +217,8 @@ func (c *Config) SetSchemaVersion(sv model.SemVer) {
 // could be established successfully, the .pgpass.new will be moved to
 // the .pgpass file, so the .pgpass.new file may be overwritten safely
 // by the subsequent migration operations.
+//
+// The `d.RoleSuffix` will be appended to the given `r` role name too.
 func (d Database) ConnectionPool(
 	ctx context.Context, r repo.Role,
 ) (repo.Pool, error) {
@@ -228,6 +271,7 @@ func (d Database) ConnectionURL(
 	if err != nil {
 		return "", fmt.Errorf("reading pass-file: %w", err)
 	}
+	r = r + d.RoleSuffix
 	prfx := fmt.Sprintf("%s:%d:%s:%s:", d.Host, d.Port, d.Name, r)
 	var pass string
 	for _, line := range strings.Split(string(passLines), "\n") {
@@ -255,6 +299,24 @@ func (d Database) ConnectionURL(
 // connection information which are kept in this Database instance.
 func (d Database) ConnectionInfo() (dbName, host string, port int) {
 	return d.Name, d.Host, d.Port
+}
+
+// NewSchemaRepo instantiates a fresh Schema repository.
+// Role names may be optionally suffixed based on the settings and
+// in that case, repo.Role role names which are passed to the
+// ConnectionPool method or RenewPasswords will be suffixed
+// automatically. Since the Schema repository has methods for
+// creation of roles or asking to grant specific privileges to
+// them, it needs to obtain the same role name suffix (as stored
+// in the current Database instance).
+//
+// The expected passwords hashing format of the target database must be
+// configured in the `d.AuthMethod` field. Also, ValidateAndNormalize
+// method is expected to be called beforehand, so it can create a hasher
+// instance based on it. That hasher will be included in the returned
+// Schema repo, so it may hash database role passwords properly.
+func (d Database) NewSchemaRepo() repo.Schema {
+	return schemarp.New(d.RoleSuffix, d.hasher)
 }
 
 // SchemaMigrator creates a repo.Migrator[repo.SchemaSettler] instance
@@ -300,6 +362,10 @@ func (d Database) SchemaMigrator(tx repo.Tx, srcDBVer model.SemVer) (
 // method again (both if the passwords are or are not updated
 // successfully). This final file movement can be performed using the
 // returned finalizer function.
+//
+// The `d.RoleSuffix` will be appended to the given role names too.
+// The `change` function must add the same suffix to `roles` roles names
+// in order to remain consistent with the in-file recorded information.
 func (d Database) RenewPasswords(
 	ctx context.Context,
 	change func(
@@ -319,6 +385,7 @@ func (d Database) RenewPasswords(
 		}
 		enc.Encode(p, b)
 		passwords[i] = string(p)
+		r = r + d.RoleSuffix
 		lines[i] = fmt.Sprintf("%s:%s:%s\n", prfx, r, passwords[i])
 	}
 	orgPath := filepath.Join(d.PassDir, ".pgpass")
@@ -334,6 +401,28 @@ func (d Database) RenewPasswords(
 		return nil, fmt.Errorf("passwords change callback: %w", err)
 	}
 	return finalizer, nil
+}
+
+// ValidateAndNormalize validates the database settings and returns an
+// error if they were not acceptable. It can also modify settings in
+// order to normalize them or replace some zero values with their
+// expected default values (if any). So, it takes a pointer receiver
+// instead of a non-reference receiver (in contrast to other methods).
+func (d *Database) ValidateAndNormalize() error {
+	switch am := d.AuthMethod; am {
+	case "scram-sha-1":
+		d.hasher = scram.SHA1()
+	case "":
+		d.AuthMethod = "scram-sha-256"
+		fallthrough
+	case "scram-sha-256":
+		d.hasher = scram.SHA256()
+	default:
+		return fmt.Errorf(
+			"unsupported database authentication method: %q", am,
+		)
+	}
+	return nil
 }
 
 // Gin contains the gin-gonic related configuration settings.
@@ -438,6 +527,9 @@ func (c *Config) ValidateAndNormalize() error {
 	settings.Nil2Zero(&c.Gin.Recovery)
 	// No need to check for c.Usecases.Cars.OldParkingDelay == nil
 	// because it has no default in adapters layer.
+	if err := c.Database.ValidateAndNormalize(); err != nil {
+		return fmt.Errorf("validating database settings: %w", err)
+	}
 	return nil
 }
 

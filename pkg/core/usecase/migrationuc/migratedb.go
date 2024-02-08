@@ -76,9 +76,9 @@ type ConfigFileLoader func(
 // The `targetCfgPath` indicates the final path which should be
 // overwritten atomically when the target settings are prepared.
 //
-// The `schemarp` repository is emploed for creation of roles and schema
-// and dropping temporary/intermediate schema. See repo.Schema for more
-// details.
+// The `repo.Schema` repository is taken from the `dstSettings` in order
+// to create roles and schema and drop temporary/intermediate schema.
+// See repo.Schema for more details.
 //
 // Target settings are first written into `targetCfgPath + ".migrated"`
 // file, then destination database contents are committed, and finally
@@ -98,14 +98,13 @@ func NewMigrateDB(
 	mig repo.Migrator[Settings],
 	dstSettings Settings,
 	targetCfgPath string,
-	schemarp repo.Schema,
 	loader ConfigFileLoader,
 ) *MigrateDBUseCase {
 	return &MigrateDBUseCase{
 		migrator:      mig,
 		dstSettings:   dstSettings,
 		targetCfgPath: targetCfgPath,
-		schemaRepo:    schemarp,
+		schemaRepo:    dstSettings.NewSchemaRepo(),
 		loader:        loader,
 	}
 }
