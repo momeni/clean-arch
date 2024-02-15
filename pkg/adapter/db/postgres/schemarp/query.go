@@ -7,6 +7,8 @@ package schemarp
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/core/repo"
@@ -20,7 +22,8 @@ import (
 func InstallFDWExtensionIfMissing(
 	ctx context.Context, c *postgres.Conn,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	_, err := c.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS postgres_fdw`)
+	return err
 }
 
 // DropServerIfExists drops the `serverName` foreign server, if it
@@ -31,7 +34,13 @@ func InstallFDWExtensionIfMissing(
 func DropServerIfExists(
 	ctx context.Context, c *postgres.Conn, serverName string,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	// Although this DDL statement does not support to take serverName
+	// as a parameterized query, it is a trusted string.
+	_, err := c.Exec(
+		ctx,
+		fmt.Sprintf(`DROP SERVER IF EXISTS %s CASCADE`, serverName),
+	)
+	return err
 }
 
 // DropIfExists drops the `schema` schema without cascading if it
@@ -44,7 +53,13 @@ func DropServerIfExists(
 func DropIfExists[Q postgres.Queryer](
 	ctx context.Context, q Q, schema string,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	// Although this DDL statement does not support to take schema name
+	// as a parameterized query, it is a trusted string.
+	_, err := q.Exec(
+		ctx,
+		fmt.Sprintf(`DROP SCHEMA IF EXISTS %s RESTRICT`, schema),
+	)
+	return err
 }
 
 // DropCascade drops `schema` schema with cascading, dropping all
@@ -57,7 +72,13 @@ func DropIfExists[Q postgres.Queryer](
 func DropCascade[Q postgres.Queryer](
 	ctx context.Context, q Q, schema string,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	// Although this DDL statement does not support to take schema name
+	// as a parameterized query, it is a trusted string.
+	_, err := q.Exec(
+		ctx,
+		fmt.Sprintf(`DROP SCHEMA %s CASCADE`, schema),
+	)
+	return err
 }
 
 // CreateSchema tries to create the `schema` schema.
@@ -68,7 +89,10 @@ func DropCascade[Q postgres.Queryer](
 func CreateSchema[Q postgres.Queryer](
 	ctx context.Context, q Q, schema string,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	// Although this DDL statement does not support to take schema name
+	// as a parameterized query, it is a trusted string.
+	_, err := q.Exec(ctx, fmt.Sprintf(`CREATE SCHEMA %s`, schema))
+	return err
 }
 
 // CreateRoleIfNotExists creates the `role` role if it does not
@@ -84,7 +108,26 @@ func CreateSchema[Q postgres.Queryer](
 func CreateRoleIfNotExists[Q postgres.Queryer](
 	ctx context.Context, q Q, roleSuffix repo.Role, role repo.Role,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	r := role + roleSuffix
+	// Although CREATE ROLE DDL statement does not support to take
+	// role name as a parameterized query, it is a trusted string.
+	_, err := q.Exec(ctx, fmt.Sprintf(`DO
+$body$
+BEGIN
+    IF NOT EXISTS (
+            SELECT *
+            FROM pg_catalog.pg_roles
+            WHERE rolname = '%s'
+    ) THEN
+        BEGIN
+            CREATE ROLE %[1]s WITH LOGIN;
+        EXCEPTION WHEN duplicate_object THEN
+            RAISE NOTICE '%%, skipping', SQLERRM USING ERRCODE=SQLSTATE;
+        END;
+    END IF;
+END
+$body$`, r))
+	return err
 }
 
 // GrantPrivileges grants ALL privileges on the `schema` schema
@@ -101,7 +144,13 @@ func GrantPrivileges[Q postgres.Queryer](
 	schema string,
 	role repo.Role,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	r := role + roleSuffix
+	// Although this DDL statement does not support to take schema and
+	// role names as a parameterized query, they are trusted strings.
+	_, err := q.Exec(ctx, fmt.Sprintf(
+		`GRANT ALL PRIVILEGES ON SCHEMA %s TO %s`, schema, r,
+	))
+	return err
 }
 
 // SetSearchPath alters the given database role and sets its default
@@ -113,7 +162,14 @@ func SetSearchPath[Q postgres.Queryer](
 	schema string,
 	role repo.Role,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	r := role + roleSuffix
+	// Although this DDL statement does not support to take schema and
+	// role names as a parameterized query, they are trusted strings.
+	_, err := q.Exec(
+		ctx,
+		fmt.Sprintf(`ALTER ROLE %s SET search_path = %s`, r, schema),
+	)
+	return err
 }
 
 // GrantFDWUsage grants the USAGE privilege on the postgres_fdw
@@ -127,7 +183,13 @@ func SetSearchPath[Q postgres.Queryer](
 func GrantFDWUsage[Q postgres.Queryer](
 	ctx context.Context, q Q, roleSuffix repo.Role, role repo.Role,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	r := role + roleSuffix
+	// Although this DDL statement does not support to take role name
+	// as a parameterized query, it is a trusted string.
+	_, err := q.Exec(ctx, fmt.Sprintf(`GRANT USAGE
+ON FOREIGN DATA WRAPPER postgres_fdw
+TO %s`, r))
+	return err
 }
 
 // ChangePasswords updates the passwords of the given roles in the
@@ -153,5 +215,41 @@ func ChangePasswords(
 	roles []repo.Role,
 	passwords []string,
 ) error {
-	panic("not implemented yet") // TODO: Implement
+	switch len(roles) {
+	default:
+		return errors.New("number of roles/passwords must be equal")
+	case 0:
+		return errors.New("at least one role name must be provided")
+	case len(passwords):
+	}
+	salt := "" // empty string asks for a fresh random salt
+	for i, r := range roles {
+		r = r + roleSuffix
+		h, err := hasher.Hash(passwords[i], salt, 16000)
+		if err != nil {
+			return fmt.Errorf("hashing password of %q role: %w", r, err)
+		}
+		err = alterRolePass(ctx, tx, r, h)
+		if err != nil {
+			return fmt.Errorf(
+				"alterRolePass(role=%q, hashed-pass=%q): %w", r, h, err,
+			)
+		}
+	}
+	return nil
+}
+
+func alterRolePass(
+	ctx context.Context,
+	tx *postgres.Tx,
+	suffixedRole repo.Role,
+	hashedPassword string,
+) error {
+	// Although this DDL statement does not support to take
+	// role name and password as a parameterized query,
+	// the role name is trusted and password is hashed and so
+	// it follows a well-known format.
+	_, err := tx.Exec(ctx, fmt.Sprintf(`ALTER ROLE %s
+WITH PASSWORD '%s'`, suffixedRole, hashedPassword))
+	return err
 }

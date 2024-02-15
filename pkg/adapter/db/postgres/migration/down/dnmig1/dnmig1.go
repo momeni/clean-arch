@@ -7,6 +7,11 @@
 // major version 1 and its corresponding Adapter type which can adapt
 // it to the version independent repo.DownMigrator[repo.SchemaSettler]
 // interface.
+//
+// Each downwards schema migrator package, but the first major version
+// which has no older major version, may contain (and embed) a down.sql
+// file in order to migrate from its own major version to the previous
+// major version, creating the relevant views.
 package dnmig1
 
 import (
@@ -119,7 +124,7 @@ func (dnmig1 *Migrator) Settler() *stlmig1.Settler {
 // changes are tracked by migrations. Therefore, this method always
 // returns an error (and a nil migrator as the first return value).
 func (dnmig1 *Migrator) MigrateDown(
-	ctx context.Context,
+	_ context.Context,
 ) (*Migrator, error) {
 	return nil, errors.New("v1 is the foremost schema major version")
 }

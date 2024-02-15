@@ -98,7 +98,7 @@ type Migrator struct {
 // newer version and wrap it by a corresponding upwards migrator.
 // However, since major version 2 has no newer major version, this
 // method always returns an error.
-func (m *Migrator) MigrateUp(ctx context.Context) (*Migrator, error) {
+func (m *Migrator) MigrateUp(_ context.Context) (*Migrator, error) {
 	return nil, errors.New("v2 is the latest settings major version")
 }
 

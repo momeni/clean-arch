@@ -16,16 +16,28 @@
 // schi.Adapter generic type (in contrast to the upwards/downwards
 // migrator types in upmigN/dnmigN packages which have to ship their
 // distinct Adapter types).
+//
+// Each schema minor-version specific package contains (and embeds) a
+// file, namely lmv.sql, standing for the last-minor-version which
+// contains the required DDL statements in order to create views in an
+// intermediate migration schema, representing the last supported minor
+// version within the same major version, based on the current minor
+// version views which are prepared by the Load method. That is, lmv.sql
+// specifies how we may migrate upwards from this minor version to the
+// last supported minor version without switching the major version.
 package sch1v0
 
 import (
 	"context"
+	_ "embed"
+	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/down/dnmig1"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/schi"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/settle/stlmig1"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/up/upmig1"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 )
 
 // These constants define the major, minor, and patch version of the
@@ -119,7 +131,15 @@ func (s1v0 *Migrator) Settler(
 // This method must be called (and returned without error) before it is
 // possible to call any other method of the Migrator struct.
 func (s1v0 *Migrator) Load(ctx context.Context) error {
-	panic("Not implemented yet") // TODO: Implement
+	if err := schi.LoadFDW(
+		ctx, Major, Minor, s1v0.tx, s1v0.url,
+	); err != nil {
+		return fmt.Errorf(
+			"schi.LoadFDW(major=%d, minor=%d, srcURL=%q): %w",
+			Major, Minor, s1v0.url, err,
+		)
+	}
+	return nil
 }
 
 // UpMigrator expects the fdw1_0 schema to contain the source database
@@ -152,11 +172,32 @@ func (s1v0 *Migrator) DownMigrator(
 	return &dnmig1.Migrator{s1v0.tx}, nil
 }
 
+// lastMinorVersionStatements embeds the lmv.sql file contents which are
+// supposed to create database schema tables (or preferably just views)
+// in the mig1 schema for the last supported minor version in the major
+// version 1 and fill them (or in case of the views, just specify the
+// rule which can be used for computation of the corresponding columns
+// values) with this assumption that the current minor version tables
+// are accessible in the fdw1_0 schema as prepared by the Load method.
+//
+//go:embed lmv.sql
+var lastMinorVersionStatements string
+
 // migrateToLastMinorVersion expects the fdw1_0 schema to contain the
 // source database contents and it fills the mig1 local schema using a
 // series of views, converting the v1.0 schema to the v1.1 schema.
 func (s1v0 *Migrator) migrateToLastMinorVersion(
 	ctx context.Context,
 ) error {
-	panic("Not implemented yet") // TODO: Implement
+	if _, err := s1v0.tx.Exec(
+		ctx, lastMinorVersionStatements,
+	); err != nil {
+		fdwSchema := migrationuc.ForeignSchemaName(Major, Minor)
+		migSchema := migrationuc.MigrationSchemaName(Major)
+		return fmt.Errorf(
+			"migrating from %q schema to %q schema: %w",
+			fdwSchema, migSchema, err,
+		)
+	}
+	return nil
 }

@@ -19,9 +19,11 @@ package dnmig2
 import (
 	"context"
 
+	"github.com/momeni/clean-arch/pkg/adapter/config/cfg1"
 	"github.com/momeni/clean-arch/pkg/adapter/config/cfg2"
 	"github.com/momeni/clean-arch/pkg/adapter/config/down/dnmig1"
 	"github.com/momeni/clean-arch/pkg/adapter/config/settings"
+	"github.com/momeni/clean-arch/pkg/adapter/config/vers"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 )
@@ -102,9 +104,24 @@ type Migrator struct {
 // instance with major version 1 will be wrapped by its corresponding
 // downwards migrator before being returned.
 func (m *Migrator) MigrateDown(
-	ctx context.Context,
+	_ context.Context,
 ) (*dnmig1.Migrator, error) {
-	panic("not implemented yet") // TODO: Implement
+	c := &cfg1.Config{
+		Database: m.Config.Database,
+		Vers: vers.Config{
+			Versions: vers.Versions{
+				Database: m.Config.Vers.Versions.Database,
+				Config:   cfg1.Version,
+			},
+		},
+	}
+	settings.OverwriteNil(&c.Gin.Logger, m.Config.Gin.Logger)
+	settings.OverwriteNil(&c.Gin.Recovery, m.Config.Gin.Recovery)
+	settings.OverwriteNil(
+		&c.Usecases.Cars.OldParkingDelay,
+		m.Config.Usecases.Cars.DelayOfOPM,
+	)
+	return &dnmig1.Migrator{c}, nil
 }
 
 // Settler returns the wrapped Config object. After migrating from a

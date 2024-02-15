@@ -7,6 +7,11 @@
 // major version 1 and its corresponding Adapter type which can adapt
 // it to the version independent repo.UpMigrator[repo.SchemaSettler]
 // interface.
+//
+// Each upwards schema migrator package, but the last major version
+// which has no newer major version, may contain (and embed) an up.sql
+// file in order to migrate from its own major version to the next
+// major version, creating the relevant views.
 package upmig1
 
 import (
@@ -118,7 +123,7 @@ func (upmig1 *Migrator) Settler() *stlmig1.Settler {
 // supported major version. Therefore, this method always returns
 // an error (and a nil migrator as the first return value).
 func (upmig1 *Migrator) MigrateUp(
-	ctx context.Context,
+	_ context.Context,
 ) (*Migrator, error) {
 	return nil, errors.New("v1 is the latest schema major version")
 }

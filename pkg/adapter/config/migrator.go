@@ -175,7 +175,7 @@ type Migrator[C settings.Config[C]] struct {
 // desired, creation of a temporary database connection, and loading
 // database information (e.g., using a LoadFromDB method) should be
 // performed by this method too.
-func (m *Migrator[C]) Load(ctx context.Context) error {
+func (m *Migrator[C]) Load(_ context.Context) error {
 	if m.c != nil {
 		return nil
 	}
@@ -206,7 +206,7 @@ func (m *Migrator[C]) MajorVersion() uint {
 // This upwards migrator contains the C configuration settings at the
 // source format version and may convert them to their next major
 // version, moving one version forward at a time.
-func (m *Migrator[C]) UpMigrator(ctx context.Context) (
+func (m *Migrator[C]) UpMigrator(_ context.Context) (
 	repo.UpMigrator[migrationuc.Settings], error,
 ) {
 	if m.c == nil {
@@ -222,7 +222,7 @@ func (m *Migrator[C]) UpMigrator(ctx context.Context) (
 // This downwards migrator contains the C configuration settings at the
 // source format version and may convert them to their previous major
 // version, moving one version backward at a time.
-func (m *Migrator[C]) DownMigrator(ctx context.Context) (
+func (m *Migrator[C]) DownMigrator(_ context.Context) (
 	repo.DownMigrator[migrationuc.Settings], error,
 ) {
 	if m.c == nil {

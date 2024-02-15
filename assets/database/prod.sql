@@ -1,0 +1,1 @@
+../../pkg/adapter/db/postgres/migration/settle/stlmig1/prod.sql

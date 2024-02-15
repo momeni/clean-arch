@@ -11,12 +11,26 @@
 // an intermediate schema and filling tables in the target schema
 // without converting their format (e.g., column names) in order to
 // persist the migration results.
+//
+// Each settlement package contains (and embeds) four .sql files.
+// The schema.sql contains DDL statements for creating database schema
+// tables with Major major version. The dev.sql and prod.sql files
+// contain data insertion statements and may be executed after feeding
+// the schema.sql file in order to insert initial sample data which are
+// suitable for a development or production environment respectively.
+// Fourth and last file is settle.sql which is used to settle views of
+// an intermediate migration schema, filling the Major major version
+// tables (which must be created by schema.sql previously) with the
+// data rows which were prepared by the migration process.
 package stlmig1
 
 import (
 	"context"
+	_ "embed"
+	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 )
 
 // These constants indicate the major, minor, and patch components of
@@ -54,6 +68,22 @@ func New(tx repo.Tx) *Settler {
 	}
 }
 
+// schemaDDLStatements embeds the schema.sql file contents which are
+// supposed to create database schema tables for major version 1 in
+// the caweb1 schema. No data rows are inserted by these statements.
+//
+//go:embed schema.sql
+var schemaDDLStatements string
+
+// settleDDLStatements embeds the settle.sql file contents which are
+// supposed to fill database schema tables for major version 1 in
+// the caweb1 schema (which must be created previously) using the views
+// (or tables) with the same names and structure from the mig1 schema
+// as the final phase of a multi-database migration scheme.
+//
+//go:embed settle.sql
+var settleDDLStatements string
+
 // SettleSchema creates major version 1 tables in the caweb1 schema
 // (representing the v1.x schema) and fills them with the contents of
 // those database views which are prepared in the mig1 schema.
@@ -63,19 +93,70 @@ func New(tx repo.Tx) *Settler {
 // and converts them by passing through the fdwN, migN, ..., migM, to
 // this mig1 and then persists them in tables of caweb1 schema.
 func (sm1 *Settler) SettleSchema(ctx context.Context) error {
-	panic("not implemented yet") // TODO: Implement
+	if _, err := sm1.tx.Exec(ctx, schemaDDLStatements); err != nil {
+		return fmt.Errorf(
+			"creating major version %d tables: %w",
+			Major, err,
+		)
+	}
+	if _, err := sm1.tx.Exec(ctx, settleDDLStatements); err != nil {
+		migSchema := migrationuc.MigrationSchemaName(Major)
+		return fmt.Errorf(
+			"filling major version %d tables using %q schema data: %w",
+			Major, migSchema, err,
+		)
+	}
+	return nil
 }
+
+// devDataStatements embeds the dev.sql file contents which are
+// supposed to fill database schema tables (which must be created
+// previously) with the development suitable initial data.
+//
+//go:embed dev.sql
+var devDataStatements string
 
 // InitDevSchema creates major version 1 tables in caweb1 schema and
 // fills them with the development suitable initial data.
 func (sm1 *Settler) InitDevSchema(ctx context.Context) error {
-	panic("not implemented yet") // TODO: Implement
+	if _, err := sm1.tx.Exec(ctx, schemaDDLStatements); err != nil {
+		return fmt.Errorf(
+			"creating major version %d tables: %w",
+			Major, err,
+		)
+	}
+	if _, err := sm1.tx.Exec(ctx, devDataStatements); err != nil {
+		return fmt.Errorf(
+			"filling major version %d tables with development data: %w",
+			Major, err,
+		)
+	}
+	return nil
 }
+
+// prodDataStatements embeds the prod.sql file contents which are
+// supposed to fill database schema tables (which must be created
+// previously) with the production suitable initial data.
+//
+//go:embed prod.sql
+var prodDataStatements string
 
 // InitProdSchema creates major version 1 tables in caweb1 schema and
 // fills them with the production suitable initial data.
 func (sm1 *Settler) InitProdSchema(ctx context.Context) error {
-	panic("not implemented yet") // TODO: Implement
+	if _, err := sm1.tx.Exec(ctx, schemaDDLStatements); err != nil {
+		return fmt.Errorf(
+			"creating major version %d tables: %w",
+			Major, err,
+		)
+	}
+	if _, err := sm1.tx.Exec(ctx, prodDataStatements); err != nil {
+		return fmt.Errorf(
+			"filling major version %d tables with production data: %w",
+			Major, err,
+		)
+	}
+	return nil
 }
 
 // MajorVersion returns the major semantic version of this Settler

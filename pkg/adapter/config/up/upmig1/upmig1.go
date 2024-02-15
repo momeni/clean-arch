@@ -19,8 +19,10 @@ import (
 	"context"
 
 	"github.com/momeni/clean-arch/pkg/adapter/config/cfg1"
+	"github.com/momeni/clean-arch/pkg/adapter/config/cfg2"
 	"github.com/momeni/clean-arch/pkg/adapter/config/settings"
 	"github.com/momeni/clean-arch/pkg/adapter/config/up/upmig2"
+	"github.com/momeni/clean-arch/pkg/adapter/config/vers"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 )
@@ -101,9 +103,24 @@ type Migrator struct {
 // instance with major version 2 will be wrapped by its corresponding
 // upwards migrator before being returned.
 func (m *Migrator) MigrateUp(
-	ctx context.Context,
+	_ context.Context,
 ) (*upmig2.Migrator, error) {
-	panic("not implemented yet") // TODO: Implement
+	c := &cfg2.Config{
+		Database: m.Config.Database,
+		Vers: vers.Config{
+			Versions: vers.Versions{
+				Database: m.Config.Vers.Versions.Database,
+				Config:   cfg2.Version,
+			},
+		},
+	}
+	settings.OverwriteNil(&c.Gin.Logger, m.Config.Gin.Logger)
+	settings.OverwriteNil(&c.Gin.Recovery, m.Config.Gin.Recovery)
+	settings.OverwriteNil(
+		&c.Usecases.Cars.DelayOfOPM,
+		m.Config.Usecases.Cars.OldParkingDelay,
+	)
+	return &upmig2.Migrator{c}, nil
 }
 
 // Settler returns the wrapped Config object. After migrating from a

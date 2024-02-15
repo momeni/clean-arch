@@ -7,6 +7,7 @@ package gin_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,7 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/routes"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -60,7 +62,9 @@ func (igts *IntegrationGinTestSuite) SetupSuite() {
 	igts.Require().NoError(err, "failed to read schema.sql file")
 	err = igts.Pool.Conn(
 		igts.Ctx, func(ctx context.Context, c repo.Conn) error {
-			_, err := c.Exec(ctx, string(sql))
+			sn := migrationuc.SchemaName(postgres.Major)
+			createSchema := fmt.Sprintf("CREATE SCHEMA %s;", sn)
+			_, err := c.Exec(ctx, createSchema+string(sql))
 			return err
 		},
 	)

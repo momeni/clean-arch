@@ -99,7 +99,7 @@ type Migrator struct {
 // older version and wrap it by a corresponding downwards migrator.
 // However, since major version 1 has no older major version, this
 // method always returns an error.
-func (m *Migrator) MigrateDown(ctx context.Context) (*Migrator, error) {
+func (m *Migrator) MigrateDown(_ context.Context) (*Migrator, error) {
 	return nil, errors.New("v1 is the foremost settings major version")
 }
 
