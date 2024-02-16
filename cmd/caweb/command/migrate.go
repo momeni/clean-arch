@@ -15,7 +15,7 @@ import (
 )
 
 var migrateCmd = &cobra.Command{
-	Use:   "migrate",
+	Use:   "migrate <SRC-CONFIG> <DST-CONFIG>",
 	Short: "Migrate a source database contents to a new empty database",
 	Long: `Migrate a source database contents to a new empty database
 while changing the format of source schema contents in order to match

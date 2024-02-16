@@ -9,7 +9,7 @@ database:
   port: 5456
   name: caweb1_1_0
   role: caweb
-  pass-file: dist/.db/caweb1_1_0/caweb.pass
+  pass-dir: dist/.db/caweb1_1_0
 gin:
   logger: true
   recovery: true
