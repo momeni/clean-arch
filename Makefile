@@ -49,10 +49,10 @@ lint:
 
 SRC_DB_DIR := dist/.db/caweb1_0_0
 .PHONY: src-db src-db-psql
-src-db: $(SRC_DB_DIR)/caweb.pass
+src-db: $(SRC_DB_DIR)/.pgpass
 	podman start caweb1_0_0-pg16-dbms
 
-$(SRC_DB_DIR)/caweb.pass:
+$(SRC_DB_DIR)/.pgpass:
 	adminpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
 		cawebpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
 		mkdir -p $(SRC_DB_DIR)/data && \
@@ -70,15 +70,15 @@ $(SRC_DB_DIR)/caweb.pass:
 			docker.io/postgres:16-bookworm
 
 src-db-psql: src-db
-	PGPASSFILE=$(SRC_DB_DIR)/caweb.pass \
+	PGPASSFILE=$(SRC_DB_DIR)/.pgpass \
 		psql -h 127.0.0.1 -p 5455 -U admin -d caweb1_0_0
 
 DST_DB_DIR := dist/.db/caweb1_1_0
 .PHONY: dst-db dst-db-psql
-dst-db: $(DST_DB_DIR)/caweb.pass
+dst-db: $(DST_DB_DIR)/.pgpass
 	podman start caweb1_1_0-pg16-dbms
 
-$(DST_DB_DIR)/caweb.pass:
+$(DST_DB_DIR)/.pgpass:
 	adminpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
 		cawebpass="$$(head -c16 /dev/random | sha1sum | cut -d' ' -f1)" && \
 		mkdir -p $(DST_DB_DIR)/data && \
@@ -96,7 +96,7 @@ $(DST_DB_DIR)/caweb.pass:
 			docker.io/postgres:16-bookworm
 
 dst-db-psql: dst-db
-	PGPASSFILE=$(DST_DB_DIR)/caweb.pass \
+	PGPASSFILE=$(DST_DB_DIR)/.pgpass \
 		psql -h 127.0.0.1 -p 5456 -U admin -d caweb1_1_0
 
 .PHONY: grep
