@@ -81,6 +81,44 @@ missing functionality or mismatched expectations.
 Indeed, these frameworks are parallels to our use cases layer, but in
 their own project.
 
+## Configuration File and Settings
+
+System use cases may be configured using a series of settings. For this
+purpose, each use case accepts its required and optional settings as a
+series of positional arguments and functional options.
+All configuration settings may be kept in a configuration file, so
+system can start up by parsing that file and instantiating the relevant
+use case objects.
+A subset of those settings may be mutable which their storage in the
+database allows users to change them dynamically without editing the
+deployment-time configuration file (holding the default settings).
+Another subset of settings may be visible which remote users, using
+the system exposed APIs, are allowed to observe them.
+Of course the sets of mutable and visible settings may have an
+intersection. And there may be settings which are mutable, but invisible
+(write-only) or visible, but immutable (read-only).
+These categories of settings can be represented using three structs.
+
+  1. A main Settings struct which has fields for mutable settings,
+  2. A Visible settings struct which is embedded by Settings and
+     represents fields which are mutable and also visible,
+  3. An Immutable settings struct which is embedded by Visible and
+     represents fields which are visible, but immutable.
+
+When accepting user inputs, we can take a Settings struct and then
+set the Immutable member to nil in order to retrieve all mutable
+settings (whether they are or are not visible).
+When reporting them back to user, we can take a Visible struct which
+excludes invisible fields (containing mutable and immutable visible
+settings).
+Since these types are sent to or retrieved from users and processed in
+the use cases layer, they need a representation in the models layer.
+Also, they need a configuration-file format specific representation
+because they should be serialized and stored in the configuration file
+and database. For simplicity, we can assume that settings which are
+stored in a configuration file and a database, both follow a common
+configuration version.
+
 ## Versioning and Migration
 
 As user requirements evolve, software products need to be changed so
@@ -155,6 +193,29 @@ A multi-database migration consists of the following main steps:
      database versions and build src migrator objects (this may require
      to connect to the src database and load parts of the settings from
      a table, if settings may be overridden),
+       - settings which are read from the src database follow the same
+         version which is used for the src config file and so they can
+         be combined easily,
+       - if settings had a different version and so they could not be
+         loaded, but the src and dst databases were the same too (not
+         just their versions, but the actual host, port, and database
+         name, so we are going to skip the database migration part as
+         mentioned in step 4 below), we should check for two factors.
+         First, whether the `/path/of/main/config.yaml.migrated` file
+         exists and points to the src and dst equivalent databases at
+         hand. Second, whether the settings which were read from the
+         database follow the same format which is asked by the dst
+         config file (considering its major version alone, since minor
+         and patch versions should be set to the latest supported values
+         in that major version and not exactly equal with the asked
+         values). These two factors indicate that we had skipped the
+         database migration in step 4 previously, saved the expected
+         configuration file in step 8, updated the src/dst database
+         there in order to hold the new mutable settings (with the dst
+         config file format) and finally committed those changes in
+         step 9, before the previous migration attempt could fail.
+         In this scenario, the old migration attempt may be resumed
+         by jumping to step 11,
   2. The dst config file is read in order to obtain the dst config and
      database versions and build dst migrator objects (the dst database
      is supposed to be empty, hence, it may not override the config file
@@ -241,15 +302,27 @@ A multi-database migration consists of the following main steps:
        - If the database migration part was bypassed, the dst database
          version must be kept as claimed in the src and dst config files
          (which of course must be the same),
+       - In absence of the database migration part, configuration file
+         format may change and so the settings format which should be
+         stored in the database may change, therefore, a transaction
+         must begin on the dst database (which is the src database too)
+         and mutable settings with the target version should be stored
+         in that transaction,
        - If the migration part was executed, the dst config file claimed
          version for the target database may be used only for the major
          version determination, while the minor and patch versions must
          be taken based on the latest known numbers (which of course
          must be equal or more recent than the dst config file value),
-  9. Commit the dst database changes (if the database migration was not
-     bypassed in step 4),
+       - In presence of the database migration part, it is required to
+         also serialize the mutable settings (with their target format)
+         and store them in the dst database, in the same transaction
+         which was used for creation and filling of other tables so far,
+  9. Commit the dst database changes (which may persist created tables
+     if the database migration was not bypassed in step 4 or may only
+     persist the updated mutable settings in the src/dst database),
   10. Using the admin user, drop all extra schema (but the `caweb3` in
-     the above example) with cascade (if they exist),
+     the above example) with cascade (if they exist and database
+     migration part was not skipped),
   11. Move `/path/of/main/config.yaml.migrated` file (from step 8) to
      the main config file (e.g., `/path/of/main/config.yaml`).
 
