@@ -6,6 +6,7 @@
 package gin_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -60,12 +61,21 @@ func TestIntegrationGinTestSuite(t *testing.T) {
 func (igts *IntegrationGinTestSuite) SetupSuite() {
 	sql, err := os.ReadFile("testdata/schema.sql")
 	igts.Require().NoError(err, "failed to read schema.sql file")
+	dev, err := os.ReadFile("testdata/dev.sql")
+	igts.Require().NoError(err, "failed to read dev.sql file")
 	err = igts.Pool.Conn(
 		igts.Ctx, func(ctx context.Context, c repo.Conn) error {
 			sn := migrationuc.SchemaName(postgres.Major)
 			createSchema := fmt.Sprintf("CREATE SCHEMA %s;", sn)
 			_, err := c.Exec(ctx, createSchema+string(sql))
-			return err
+			if err != nil {
+				return fmt.Errorf("filling schema: %w", err)
+			}
+			_, err = c.Exec(ctx, string(dev))
+			if err != nil {
+				return fmt.Errorf("inserting dev records: %w", err)
+			}
+			return nil
 		},
 	)
 	igts.Require().NoError(err, "failed to create schema contents")
@@ -338,6 +348,10 @@ func (igts *IntegrationGinTestSuite) TestRide() {
 }
 
 func (igts *IntegrationGinTestSuite) TestPark() {
+	igts.testPark("new")
+}
+
+func (igts *IntegrationGinTestSuite) testPark(mode string) {
 	carID, err := igts.createCar(&model.Car{
 		Name: "test-car",
 		Coordinate: model.Coordinate{
@@ -353,7 +367,7 @@ func (igts *IntegrationGinTestSuite) TestPark() {
 		"/api/caweb/v1/cars/"+carID.String(),
 		urlEncoded(map[string]string{
 			"op":   "park",
-			"mode": "new",
+			"mode": mode,
 		}),
 	)
 	igts.Require().NoError(err, "cannot create PATCH request")
@@ -374,4 +388,65 @@ func (igts *IntegrationGinTestSuite) TestPark() {
 		*res,
 		"unexpected resulting car instance",
 	)
+}
+
+func (igts *IntegrationGinTestSuite) TestSettings() {
+	// 2s delay is set in testdata/dev.sql as the default delay
+	if !igts.Run(
+		"parking with 2-secs delay", igts.timedParking(2*time.Second),
+	) {
+		return
+	}
+	w := httptest.NewRecorder()
+	d := 5 * time.Second
+	body := model.Settings{
+		VisibleSettings: model.VisibleSettings{
+			ParkingMethod: model.ParkingMethodSettings{
+				Delay: &d,
+			},
+		},
+	}
+	b, err := json.Marshal(body)
+	igts.Require().NoError(err, "cannot serialize settings req body")
+	req, err := http.NewRequest(
+		http.MethodPut,
+		"/api/caweb/v1/settings",
+		bytes.NewReader(b),
+	)
+	igts.Require().NoError(err, "cannot create PUT request")
+
+	igts.Gin.ServeHTTP(w, req)
+	igts.Equal(200, w.Code)
+
+	igts.Run("querying settings", func() {
+		w := httptest.NewRecorder()
+		req, err := http.NewRequest(
+			http.MethodGet, "/api/caweb/v1/settings", nil,
+		)
+		igts.Require().NoError(err, "cannot create GET request")
+
+		igts.Gin.ServeHTTP(w, req)
+		igts.Equal(200, w.Code)
+		b := w.Body.Bytes()
+		s := &model.VisibleSettings{}
+		igts.NoError(json.Unmarshal(b, s), "settings is not json")
+		igts.Equal(&d, s.ParkingMethod.Delay, "wrong delay")
+	})
+	igts.Run(
+		"parking with 5-secs delay", igts.timedParking(5*time.Second),
+	)
+}
+
+func (igts *IntegrationGinTestSuite) timedParking(
+	d time.Duration,
+) func() {
+	return func() {
+		pre := time.Now()
+		igts.testPark("old")
+		post := time.Now()
+		duration := post.Sub(pre)
+		e := 600 * time.Millisecond
+		igts.Less(d-e, duration, "too fast parking")
+		igts.Greater(d+e, duration, "too slow parking")
+	}
 }
