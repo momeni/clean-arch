@@ -53,8 +53,15 @@ func (sv *SemVer) UnmarshalText(text []byte) (err error) {
 }
 
 // Marshal serializes sv semantic version as its string representation.
+// This is required for YAML serialization.
 func (sv *SemVer) Marshal() string {
 	return sv.String()
+}
+
+// MarshalText implements encoding.TextMarshaler interface and
+// serializes `sv` semantic version as its string representation.
+func (sv *SemVer) MarshalText() ([]byte, error) {
+	return []byte(sv.String()), nil
 }
 
 // String returns the sv semantic version as a dot-separated string

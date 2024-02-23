@@ -264,7 +264,7 @@ func (migucts *MigrationUseCasesTestSuite) visitCfgDBVers(
 		}
 		err := c1.ValidateAndNormalize()
 		a.NoError(err, "validating *cfg1.Config instance")
-		s = settings.Adapter[*cfg1.Config]{c1}
+		s = settings.Adapter[*cfg1.Config, cfg1.Serializable]{c1}
 		t.Run(name, func(t *testing.T) {
 			visit(t, s, cfgVer, dbVer, name)
 		})
@@ -288,7 +288,7 @@ func (migucts *MigrationUseCasesTestSuite) visitCfgDBVers(
 		}
 		err = c2.ValidateAndNormalize()
 		a.NoError(err, "validating *cfg2.Config instance")
-		s = settings.Adapter[*cfg2.Config]{c2}
+		s = settings.Adapter[*cfg2.Config, cfg2.Serializable]{c2}
 		t.Run(name, func(t *testing.T) {
 			visit(t, s, cfgVer, dbVer, name)
 		})

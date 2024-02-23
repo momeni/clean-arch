@@ -16,6 +16,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v0"
@@ -136,6 +137,50 @@ func New(tx repo.Tx, v model.SemVer, url string) (
 		default:
 			return nil, fmt.Errorf("unsupported minor: %d", minor)
 		}
+	default:
+		return nil, fmt.Errorf("unsupported major: %d", major)
+	}
+}
+
+// LoadSettings loads the serialized mutable settings from the database
+// using the given `c` connection, assuming that the database schema
+// version is equal with the given `v` argument. Loading depends on
+// both of the major and minor versions just like the migration loading
+// phase.
+func LoadSettings(ctx context.Context, c repo.Conn, v model.SemVer) (
+	[]byte, error,
+) {
+	switch major := v[0]; major {
+	case 1:
+		switch minor := v[1]; minor {
+		case 0:
+			return sch1v0.LoadSettings(ctx, c)
+		case 1:
+			return sch1v1.LoadSettings(ctx, c)
+		default:
+			return nil, fmt.Errorf("unsupported minor: %d", minor)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported major: %d", major)
+	}
+}
+
+// NewSettingsPersister instantiates a repo.SettingsPersister which
+// wraps the given `tx` transaction and supports storage of a serialized
+// version of mutable settings in the database.
+//
+// For the underlying implementation, see stlmigN packages which depend
+// on the schema major version (since migration needs to fill tables
+// for the latest supported minor version of a desired major version).
+func NewSettingsPersister(tx repo.Tx, v model.SemVer) (
+	repo.SettingsPersister, error,
+) {
+	switch major := v[0]; major {
+	case 1:
+		if minor := v[1]; minor > stlmig1.Minor {
+			return nil, fmt.Errorf("unsupported minor: %d", minor)
+		}
+		return stlmig1.New(tx), nil
 	default:
 		return nil, fmt.Errorf("unsupported major: %d", major)
 	}

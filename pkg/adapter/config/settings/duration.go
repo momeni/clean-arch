@@ -6,6 +6,7 @@
 package settings
 
 import (
+	"errors"
 	"strings"
 	"time"
 )
@@ -55,4 +56,14 @@ func (d *Duration) Marshal() *string {
 		s = s[:len(s)-2]
 	}
 	return &s
+}
+
+// MarshalText implements encoding.TextMarshaler interface and
+// serializes `d` duration using its Marshal method.
+// This interface is required for json serialization.
+func (d *Duration) MarshalText() ([]byte, error) {
+	if s := d.Marshal(); s != nil {
+		return []byte(*s), nil
+	}
+	return nil, errors.New("nil duration")
 }

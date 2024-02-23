@@ -31,3 +31,11 @@ VALUES (
         false,
         NULL
     );
+
+-- The version (for each configuration format major version) must match
+-- with the latest supported minor version.
+INSERT INTO settings (component, config)
+VALUES (
+    'caweb',
+    '{"version":"2.0.0","cars":{"delay_of_opm":"2s"}}'::json
+);

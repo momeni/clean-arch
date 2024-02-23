@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/momeni/clean-arch/pkg/core/cerr"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"gopkg.in/yaml.v3"
@@ -113,11 +114,14 @@ func NewMigrateDB(
 // determining the migration direction by the settings versions and
 // schema versions as recorded in the source and destination configs.
 func (mduc *MigrateDBUseCase) Migrate(ctx context.Context) error {
-	if err := mduc.migrateSettings(ctx); err != nil {
+	resumed, err := mduc.migrateSettings(ctx)
+	if err != nil {
 		return fmt.Errorf("migrating settings: %w", err)
 	}
-	if err := mduc.migrateDBAndSaveConfigFile(ctx); err != nil {
-		return fmt.Errorf("migrating db & saving config file: %w", err)
+	if !resumed {
+		if err := mduc.migrateDBAndSaveConfigFile(ctx); err != nil {
+			return fmt.Errorf("migrating db & saving settings: %w", err)
+		}
 	}
 	if err := mduc.commitTargetSettings(); err != nil {
 		return fmt.Errorf("committing target settings: %w", err)
@@ -141,26 +145,116 @@ func (mduc *MigrateDBUseCase) Migrate(ctx context.Context) error {
 // field of `mduc`. The `targetSettings` should be written into a
 // file before committing the destination database changes (and if it
 // could reach to its final state with no other error).
+//
+// The resumed boolean return value indicates that a previous migration
+// attempt had failed, while the src and dst databases were the same (so
+// only the configuration files should be migrated) and the settings
+// migration had proceeded enough to write a `.migrated` file and commit
+// the target mutable settings in the database too. That is, resumed
+// boolean informs caller that only the configuration file commitment
+// step is remaining for completion of the migration.
 func (mduc *MigrateDBUseCase) migrateSettings(
 	ctx context.Context,
-) error {
+) (resumed bool, err error) {
 	mig := mduc.migrator
 	srcMajorVer := mig.MajorVersion()
 	dstCfgVer := mduc.dstSettings.Version()
 	dstMajorVer := dstCfgVer[0]
 	ss, err := obtainSettler(ctx, mig, srcMajorVer, dstMajorVer)
 	if err != nil {
-		return fmt.Errorf(
-			"migrating from %d to %v major version: %w",
-			srcMajorVer, dstMajorVer, err,
-		)
+		var msve *cerr.MismatchingSemVerError
+		if ss == nil || !errors.As(err, &msve) {
+			return false, fmt.Errorf(
+				"migrating from %d to %v major version: %w",
+				srcMajorVer, dstMajorVer, err,
+			)
+		}
+		// src config could be loaded, but could not be overridden by DB
+		err = mduc.resumeUniDBMigration(ctx, ss, msve, dstCfgVer)
+		if err != nil {
+			return false, fmt.Errorf(
+				"examining possibility of resumption: %w", err,
+			)
+		}
+		return true, nil
 	}
 	mduc.srcSettings = ss
 	ts := ss.Clone()
 	if err := ts.MergeSettings(mduc.dstSettings); err != nil {
-		return fmt.Errorf("merging src and dst settings: %w", err)
+		return false, fmt.Errorf("merging src/dst settings: %w", err)
 	}
 	mduc.targetSettings = ts
+	return false, nil
+}
+
+// resumeUniDBMigration checks for following conditions:
+//  1. The src and dst databases (described by srcSettings and
+//     mduc.dstSettings) belong to the same database (considering their
+//     connection information) and the src database version is backward
+//     compatible with the dst database (so it is possible to use the src
+//     database instead of the dst database in a uni-database migration
+//     and only update the configuration settings format),
+//  2. A .migrated file was created by an old migration attempt,
+//  3. The .migrated file describes the same dst database and is
+//     compatible with it (so it can be accepted as a migrated version
+//     of the src settings),
+//  4. The configuration settings version of the .migrated file is
+//     also backward compatible with the settings version which was
+//     asked by the dstCfgVer argument,
+//  5. The unexpected version of the settings which were stored in the
+//     src/dst database, as reported by the srcSettingsOverridingErr
+//     argument, is exactly equal with the .migrated settings format
+//     version (and it was committed in the src database because the
+//     old migration had succeeded to proceed enough to commit its
+//     transaction and now, only the last atomic move of the target
+//     configuration file is remaining).
+//
+// If aforementioned conditions are met, a nil error will be returned.
+func (mduc *MigrateDBUseCase) resumeUniDBMigration(
+	ctx context.Context,
+	srcSettings Settings,
+	srcSettingsOverridingErr *cerr.MismatchingSemVerError,
+	dstCfgVer model.SemVer,
+) error {
+	switch sameDBs, err := HasTheSameConnectionInfo(
+		srcSettings, mduc.dstSettings,
+	); {
+	case err != nil:
+		return fmt.Errorf("uni-db migration schema versions: %w", err)
+	case !sameDBs:
+		return fmt.Errorf(
+			"multi-db migration: overriding src settings: %w",
+			srcSettingsOverridingErr,
+		)
+	}
+	ms, err := mduc.loadTargetSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("loading .migrated file: %w", err)
+	}
+	switch sameDBs, err := HasTheSameConnectionInfo(
+		ms, mduc.dstSettings,
+	); {
+	case err != nil:
+		return fmt.Errorf(
+			"comparing dst schema with .migrated file version: %w", err,
+		)
+	case !sameDBs:
+		return errors.New("irrelevant .migrated file")
+	}
+	targetCfgVer := ms.Version()
+	if !AreVersionsCompatible(targetCfgVer, dstCfgVer) {
+		return fmt.Errorf(
+			"dst config v%s may not be replaced by .migrated v%s",
+			dstCfgVer, targetCfgVer,
+		)
+	}
+	dstDBCfgVer := (*srcSettingsOverridingErr)[1]
+	if targetCfgVer != dstDBCfgVer {
+		return fmt.Errorf(
+			"dst DB settings v%s does not match with .migrated v%s",
+			dstDBCfgVer, targetCfgVer,
+		)
+	}
 	return nil
 }
 
@@ -177,7 +271,7 @@ func (mduc *MigrateDBUseCase) migrateSettings(
 // The configuration settings are migrated by `migrateSettings` method
 // which performs its settlement operation by merging the destination
 // settings into the obtained target settings.
-// The database schema settings are migrated by the fillMigPathSchema
+// The database schema settings are migrated by the `fillMigPathSchema`
 // method which performs its settlement operation by creating the
 // relevant tables and filling them using the views of other schema
 // versions.
@@ -188,6 +282,13 @@ func obtainSettler[S any](
 ) (S, error) {
 	var snil S
 	if err := mig.Load(ctx); err != nil {
+		// If the Load method could succeed partially, the Settler
+		// method may return a settler object (and a nil error), so
+		// it can be returned alongside the wrapped err.
+		// If the Settler method returned a non-nil error, snil will
+		// remain uninitialized.
+		// Therefore, it is not required to check Settler error.
+		snil, _ := mig.Settler(ctx)
 		return snil, fmt.Errorf("Load(): %w", err)
 	}
 	if srcMajorVer > dstMajorVer {
@@ -254,8 +355,9 @@ func (mduc *MigrateDBUseCase) migrateDBAndSaveConfigFile(
 	dstVer := mduc.dstSettings.SchemaVersion()
 	if sameDBs {
 		mduc.targetSettings.SetSchemaVersion(dstVer)
-		if err := mduc.saveTargetSettings(); err != nil {
-			return fmt.Errorf("saving .migrated config: %w", err)
+		err = mduc.persistSettingsInDBAndFile(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("persisting target settings: %w", err)
 		}
 		return nil
 	}
@@ -270,6 +372,52 @@ func (mduc *MigrateDBUseCase) migrateDBAndSaveConfigFile(
 		ctx, serverName, schemaNames,
 	); err != nil {
 		return fmt.Errorf("dropping intermediate schema: %w", err)
+	}
+	return nil
+}
+
+// persistSettingsInDBAndFile examines the mduc.targetSettings instance,
+// serializes its mutable settings, and uses the persister argument for
+// persisting it in the database before trying to save the complete
+// mduc.targetSettings in a configuration file.
+// If the persister argument is nil, a new connection will be
+// established (using the repo.NormalRole) and a new persister object
+// will be created using the mduc.targetSettings.SettingsPersister
+// in order to try the in-database (and then in-file) persistence again.
+func (mduc *MigrateDBUseCase) persistSettingsInDBAndFile(
+	ctx context.Context, persister repo.SettingsPersister,
+) error {
+	if persister != nil {
+		b, err := mduc.targetSettings.Serialize()
+		if err != nil {
+			return fmt.Errorf("serializing target settings: %w", err)
+		}
+		err = persister.PersistSettings(ctx, b)
+		if err != nil {
+			return fmt.Errorf("saving mutable settings in DB: %w", err)
+		}
+		err = mduc.saveTargetSettings()
+		if err != nil {
+			return fmt.Errorf("saving .migrated config file: %w", err)
+		}
+		return nil
+	}
+	p, err := mduc.targetSettings.ConnectionPool(ctx, repo.NormalRole)
+	if err != nil {
+		return fmt.Errorf("creating DB pool for normal role: %w", err)
+	}
+	defer p.Close()
+	err = p.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
+		return c.Tx(ctx, func(ctx context.Context, tx repo.Tx) error {
+			sp, err := mduc.targetSettings.SettingsPersister(tx)
+			if err != nil {
+				return fmt.Errorf("creating SettingsPersister: %w", err)
+			}
+			return mduc.persistSettingsInDBAndFile(ctx, sp)
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("transaction failed: %w", err)
 	}
 	return nil
 }
@@ -468,13 +616,9 @@ func (mduc *MigrateDBUseCase) fillMigPathSchema(
 			if err != nil {
 				return fmt.Errorf("SettleSchema(): %w", err)
 			}
-			// This is the proper point to persist mutable settings
-			// in DB (obtained from mduc.targetSettings) if it is
-			// desired to override settings based on the DB contents.
-
-			err = mduc.saveTargetSettings()
+			err = mduc.persistSettingsInDBAndFile(ctx, ss)
 			if err != nil {
-				return fmt.Errorf("saving .migrated config: %w", err)
+				return fmt.Errorf("persisting target settings: %w", err)
 			}
 			return nil
 		})

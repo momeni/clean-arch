@@ -7,8 +7,8 @@ package migrationuc
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/momeni/clean-arch/pkg/core/cerr"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"gopkg.in/yaml.v3"
@@ -89,6 +89,20 @@ type SchemaSettings interface {
 		repo.Migrator[repo.SchemaSettler], error,
 	)
 
+	// SettingsPersister instantiates a repo.SettingsPersister for the
+	// database schema version (see SchemaVersion method), wrapping the
+	// given `tx` transaction argument.
+	// Obtained settings persister depends on the schema major version
+	// alone because the migration process only needs to create and fill
+	// tables for the latest minor version of some target major version.
+	// Caller needs to serialize the mutable settings independently
+	// (based on the settings format version) and then employ this
+	// persister object for its storage in the database (see the
+	// Serialize method of the Settings interface). A transaction (not
+	// a connection) is required because other migration operations
+	// must be performed usually in the same transaction.
+	SettingsPersister(tx repo.Tx) (repo.SettingsPersister, error)
+
 	// SchemaInitializer creates a repo.SchemaInitializer instance
 	// which wraps the given transaction argument and can be used to
 	// initialize the database with development or production suitable
@@ -168,6 +182,14 @@ type Settings interface {
 	// describe the destination settings values.
 	MergeSettings(s Settings) error
 
+	// Serialize finds out about the mutable settings of this Settings
+	// instance and tries to serialize them as a json string, returning
+	// the resulting byte slice and any possible error. Returned error
+	// (if any) belongs to the json serialization phase.
+	// This method helps to decouple the configuration settings format
+	// versions from the database schema format versions.
+	Serialize() ([]byte, error)
+
 	// Version returns the semantic version of this Settings format.
 	Version() model.SemVer
 }
@@ -191,8 +213,16 @@ func HasTheSameConnectionInfo(s1, s2 SchemaSettings) (bool, error) {
 	}
 	v1 := s1.SchemaVersion()
 	v2 := s2.SchemaVersion()
-	if v1[0] == v2[0] && v1[1] >= v2[1] {
+	if AreVersionsCompatible(v1, v2) {
 		return true, nil
 	}
-	return true, fmt.Errorf("version mismatch: %v vs. %v", v1, v2)
+	return true, &cerr.MismatchingSemVerError{v1, v2}
+}
+
+// AreVersionsCompatible returns true if the given semantic version
+// numbers have the same major version and the minor version of v1 is
+// not older than v2, so it can be said that v1 is backward-compatible
+// with v2. That is, users of v2 may keep using v1 with no changes.
+func AreVersionsCompatible(v1, v2 model.SemVer) bool {
+	return v1[0] == v2[0] && v1[1] >= v2[1]
 }

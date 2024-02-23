@@ -30,6 +30,11 @@ import "context"
 // relevant. The SettleSchema method is supposed to perform this
 // final database schema settlement operation.
 type SchemaSettler interface {
+	// SettingsPersister interface indicates that each SchemaSettler,
+	// in addition to the database schema settlement, can persist the
+	// independently migrated mutable settings in the database.
+	SettingsPersister
+
 	// SettleSchema settles the database schema migration operation.
 	//
 	// If the migration operation was implemented by creating a set of
@@ -48,6 +53,32 @@ type SchemaSettler interface {
 	// For example, caweb1 schema name may be filled by major version 1
 	// schema settler.
 	MajorVersion() uint
+}
+
+// SettingsPersister interface specifies that how mutable settings may
+// be persisted in a database, after being serialized as a byte slice.
+// Each instance of this interface shall embed the relevant database
+// transaction instance, so its lifetime is entangled with a single
+// migration process (just like the SchemaSettler and other migration
+// objects), allowing them to store migration process states (if any).
+//
+// When a multi-database migration operation is carried, an instance
+// of SchemaSettler will be obtained in the last phase which can be
+// used in order to persist all migrated tables contents.
+// The SettingsPersister interface is embedded by SchemaSettler, so it
+// can also persist the migrated mutable settings in the same
+// transaction. When a uni-database migration operation is carried,
+// that is, only the configuration file format is being changed, then
+// the migrationuc.SchemaSettings.SettingsPersister method may be used
+// in order to obtain a SettingsPersister for storing the settings in
+// the src/dst database.
+type SettingsPersister interface {
+	// PersistSettings persists the given mutableSettings byte slice as
+	// the serialized form of the system mutable configuration settings,
+	// using the transaction which is hold by this interface and may be
+	// used for persistence of other tables contents too. The
+	// persistence applies whenever the caller commits its transaction.
+	PersistSettings(ctx context.Context, mutableSettings []byte) error
 }
 
 // SchemaInitializer interface is exposed by each schema version

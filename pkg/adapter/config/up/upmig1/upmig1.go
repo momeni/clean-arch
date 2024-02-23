@@ -34,8 +34,10 @@ import (
 type (
 	// C is the underlying Config type
 	C = *cfg1.Config
+	// S is the Serializable struct type containing mutable settings
+	S = cfg1.Serializable
 	// Type is implemented by the Migrator type
-	Type = settings.UpMigrator[C, *upmig2.Migrator]
+	Type = settings.UpMigrator[C, S, *upmig2.Migrator]
 )
 
 // Adapter wraps and adapts an instance of Type in order to provide
@@ -67,11 +69,11 @@ func Adapt(m *Migrator) repo.UpMigrator[migrationuc.Settings] {
 }
 
 // Settler calls the wrapped Type Settler method, obtains a C instance,
-// and wraps it by settings.Adapter[C] in order to expose an instance
+// and wraps it by settings.Adapter[C, S] in order to expose an instance
 // of migrationuc.Settings interface.
 func (a Adapter) Settler() migrationuc.Settings {
 	c := a.T.Settler()
-	return settings.Adapter[C]{c}
+	return settings.Adapter[C, S]{c}
 }
 
 // MigrateUp calls the wrapped Type MigrateUp method, obtains the next

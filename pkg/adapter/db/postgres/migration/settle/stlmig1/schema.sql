@@ -16,3 +16,18 @@ CREATE TABLE cars (
 
 ALTER TABLE ONLY cars
 ADD CONSTRAINT cars_pkey PRIMARY KEY (cid);
+
+CREATE TABLE settings (
+    -- an enum type instead of text may be helpful here too
+    component text NOT NULL,
+    -- json type is preferred over jsonb because we expect no reparsing
+    -- and searching on this field; indeed, a text type might work with
+    -- similar performance, but with less clarity about the contents of
+    -- this column and no validation (and of course, we can change it
+    -- to jsonb by a minor version update whenever searching in the
+    -- database became helpful).
+    config json NOT NULL
+);
+
+ALTER TABLE ONLY settings
+ADD CONSTRAINT settings_pkey PRIMARY KEY (component);

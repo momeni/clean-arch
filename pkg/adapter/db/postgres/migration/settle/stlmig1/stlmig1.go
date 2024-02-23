@@ -167,3 +167,23 @@ func (sm1 *Settler) InitProdSchema(ctx context.Context) error {
 func (sm1 *Settler) MajorVersion() uint {
 	return Major
 }
+
+// PersistSettings persists the given mutableSettings byte slice as the
+// serialized form of the system mutable configuration settings, using
+// the transaction which is hold by `sm1` object. This persistence will
+// take effect whenever the caller could commit its transaction.
+func (sm1 *Settler) PersistSettings(
+	ctx context.Context, mutableSettings []byte,
+) error {
+	switch count, err := sm1.tx.Exec(
+		ctx,
+		"UPDATE settings SET config=$1 WHERE component='caweb'",
+		mutableSettings,
+	); {
+	case err != nil:
+		return fmt.Errorf("updating caweb settings row: %w", err)
+	case count != 1:
+		return fmt.Errorf("%d rows are updated instead of 1", count)
+	}
+	return nil
+}

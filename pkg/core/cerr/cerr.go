@@ -7,6 +7,8 @@
 // This package includes the Error struct which helps to wrap common
 // errors with HTTPStatusCode, so the errors may be classified based
 // on their types.
+// It also includes MismatchingSemVerError which is useful in the
+// migration use cases where specific format versions may be expected.
 package cerr
 
 import (

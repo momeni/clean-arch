@@ -13,3 +13,6 @@ AS SELECT
             ELSE NULL
         END
     FROM fdw1_0.cars;
+
+CREATE VIEW settings (component, config)
+AS SELECT component, config FROM fdw1_0.settings;

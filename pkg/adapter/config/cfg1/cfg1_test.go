@@ -23,7 +23,7 @@ import (
 // being converted to a version-specific interface (and so causing a
 // compilation error in case of the mismatched types instead of getting
 // some runtime error).
-var _ settings.Config[*cfg1.Config] = (*cfg1.Config)(nil)
+var _ settings.Config[*cfg1.Config, cfg1.Serializable] = (*cfg1.Config)(nil)
 
 func ExampleMarshalYAML() {
 	d, l, r := settings.Duration(time.Hour), true, true

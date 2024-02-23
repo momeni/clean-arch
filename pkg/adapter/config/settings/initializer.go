@@ -29,3 +29,17 @@ func OverwriteNil[T any](dst **T, src *T) {
 	t := *src
 	(*dst) = &t
 }
+
+// OverwriteUnconditionally overwrites the (*dst) pointer, which may or
+// may not be a nil pointer, unconditionally based on the src pointer.
+// If the src pointer is nil, (*dst) is overwritten so it becomes nil.
+// If the src pointer is not nil, (*dst) is overwritten so it points to
+// a newly allocated T instance which is initialized by (*src) value.
+func OverwriteUnconditionally[T any](dst **T, src *T) {
+	if src == nil {
+		(*dst) = nil
+		return
+	}
+	t := *src
+	(*dst) = &t
+}

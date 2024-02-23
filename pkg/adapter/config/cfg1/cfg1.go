@@ -151,6 +151,24 @@ func (c *Config) SchemaMigrator(tx repo.Tx) (
 	return c.Database.SchemaMigrator(tx, c.SchemaVersion())
 }
 
+// SettingsPersister instantiates a repo.SettingsPersister for the
+// database schema version of the `c` Config instance, wrapping the
+// given `tx` transaction argument.
+// Obtained settings persister depends on the schema major version alone
+// because the migration process only needs to create and fill tables
+// for the latest minor version of some target major version.
+// Caller needs to serialize the mutable settings independently (based
+// on the settings format version) and then employ this persister object
+// for its storage in the database (see the settings.Adapter.Serialize
+// and Config.Serializable methods).
+// A transaction (not a connection) is required because other migration
+// operations must be performed usually in the same transaction.
+func (c *Config) SettingsPersister(tx repo.Tx) (
+	repo.SettingsPersister, error,
+) {
+	return migration.NewSettingsPersister(tx, c.SchemaVersion())
+}
+
 // SchemaInitializer creates a repo.SchemaInitializer instance which
 // wraps the given transaction argument and can be used to initialize
 // the database with development or production suitable data. The format
@@ -509,19 +527,70 @@ func Load(data []byte) (*Config, error) {
 	return c, nil
 }
 
+// LoadFromDB parses the given data byte slice and loads a Config
+// instance (the first return value). It also tries to establish a
+// connection to the corresponding database which its connection
+// information are described in the loaded Config instance.
+// It is expected to find a serialized version of mutable settings
+// following the same format which is used by Config (i.e., Serializable
+// struct) in the database. The mutable settings from the database will
+// override the settings which are read from the data byte slice.
+// Thereafter, loaded and mutated Config will be validated and
+// normalized in order to ensure that provided settings are acceptable.
+//
+// If some settings should be overridden by environment variables, they
+// should be updated after parsing the data byte slice and before
+// checking the database contents (so configuration file may be updated
+// by environment variables and both may be updated by database contents
+// respectively). If an error prevents the configuration settings to be
+// updated using the database contents, but the loaded static settings
+// were valid themselves, LoadFromDB still returns the Config instance.
+// The second return value which is a boolean reports if the Config
+// instance is or is not being returned (like an ok flag for the first
+// return value). Any errors will be returned as the last return value.
+func LoadFromDB(ctx context.Context, data []byte) (
+	*Config, bool, error,
+) {
+	c := &Config{}
+	if err := yaml.Unmarshal(data, c); err != nil {
+		return nil, false, fmt.Errorf("unmarshalling yaml: %w", err)
+	}
+	if err := c.Vers.Validate(Major, Minor); err != nil {
+		return nil, false, fmt.Errorf(
+			"expecting version v%d.%d: %w", Major, Minor, err,
+		)
+	}
+	if err := c.Database.ValidateAndNormalize(); err != nil {
+		return nil, false, fmt.Errorf("validating DB settings: %w", err)
+	}
+	dbErr := settings.LoadFromDB(ctx, c)
+	if dbErr != nil {
+		dbErr = fmt.Errorf("settings.LoadFromDB: %w", dbErr)
+	}
+	err := c.ValidateAndNormalize()
+	switch {
+	case err != nil && dbErr != nil:
+		return nil, false, fmt.Errorf(
+			"invalid config file (%w) could not be updated from DB: %w",
+			err, dbErr,
+		)
+	case err == nil && dbErr != nil:
+		return c, true, dbErr
+	case err != nil && dbErr == nil:
+		return nil, false, fmt.Errorf("validating configs: %w", err)
+	}
+	return c, true, nil
+}
+
 // ValidateAndNormalize validates the configuration settings and
 // returns an error if they were not acceptable. It can also modify
 // settings in order to normalize them or replace some zero values with
 // their expected default values (if any).
 func (c *Config) ValidateAndNormalize() error {
-	v := c.Vers.Versions.Config
-	if v[0] != Major {
+	if err := c.Vers.Validate(Major, Minor); err != nil {
 		return fmt.Errorf(
-			"major version is %d instead of %d", v[0], Major,
+			"expecting version v%d.%d: %w", Major, Minor, err,
 		)
-	}
-	if v[1] > Minor {
-		return fmt.Errorf("minor version %d is not supported", v[1])
 	}
 	settings.Nil2Zero(&c.Gin.Logger)
 	settings.Nil2Zero(&c.Gin.Recovery)
@@ -599,13 +668,14 @@ func (c *Config) Marshal() *Marshalled {
 // interface is defined as pkg/core/usecase/migrationuc.Settings which
 // provides MergeSettings method instead of MergeConfig and accepts
 // an instance of Settings interface instead of the Config instance.
-// The pkg/adapter/config/settings.Adapter[Config] is defined in order
-// to wrap a Config instance and implement the Settings instance.
+// The pkg/adapter/config/settings.Adapter[Config, Serializable] is
+// defined in order to wrap a Config instance and implement the
+// migrationuc.Settings interface.
 //
 // Presence of the Dereference method allows users of the Config struct
-// and the Adapter[Config] struct to use them uniformly. Indeed, both
-// of the raw Config and its wrapper Adapter[Config] instances can be
-// represented by pkg/adapter/config/settings.Dereferencer[Config]
+// and the Adapter[Config, Serializable] struct to use them uniformly.
+// Indeed, both of the raw Config and its wrapper Adapter instances can
+// be represented by pkg/adapter/config/settings.Dereferencer[Config]
 // interface and so the wrapped Config instance may be obtained from
 // them using the Dereference method. Note that a type assertion from
 // the Settings interface to the Adapter instance requires pre-knowledge

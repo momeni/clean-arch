@@ -29,12 +29,42 @@ import (
 // This function is similar to the LoadMigrator function with this
 // difference that loaded configuration settings may be overridden by
 // their corresponding values from the source database.
-// In the current implementation, settings are not kept in the database
-// and so, LoadSrcMigrator simply calls the LoadMigrator function.
+//
+// The configuration file contents and those database contents which may
+// override them, must have the same version (including their patch
+// version) because changes in the version components should be applied
+// through a migration process and database version may not change
+// without updating the configuration file version at the same time.
 func LoadSrcMigrator(path string) (
 	repo.Migrator[migrationuc.Settings], error,
 ) {
-	return LoadMigrator(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading config file: %w", err)
+	}
+	v, err := vers.Load(data)
+	if err != nil {
+		return nil, fmt.Errorf("loading versions: %w", err)
+	}
+	vc := v.Versions
+	switch m := vc.Config[0]; m {
+	case 1:
+		return &Migrator[*cfg1.Config, cfg1.Serializable]{
+			data:    data,
+			loader:  cfg1.LoadFromDB,
+			upmiger: upmig1.NewUpMig,
+			dnmiger: dnmig1.NewDnMig,
+		}, nil
+	case 2:
+		return &Migrator[*cfg2.Config, cfg2.Serializable]{
+			data:    data,
+			loader:  cfg2.LoadFromDB,
+			upmiger: upmig2.NewUpMig,
+			dnmiger: dnmig2.NewDnMig,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported major version: %d", m)
+	}
 }
 
 // LoadMigrator reads a config file which is stored at the given `path`,
@@ -68,16 +98,16 @@ func LoadMigrator(path string) (
 	vc := v.Versions
 	switch m := vc.Config[0]; m {
 	case 1:
-		return &Migrator[*cfg1.Config]{
+		return &Migrator[*cfg1.Config, cfg1.Serializable]{
 			data:    data,
-			loader:  cfg1.Load,
+			loader:  noCtxLoad(cfg1.Load),
 			upmiger: upmig1.NewUpMig,
 			dnmiger: dnmig1.NewDnMig,
 		}, nil
 	case 2:
-		return &Migrator[*cfg2.Config]{
+		return &Migrator[*cfg2.Config, cfg2.Serializable]{
 			data:    data,
-			loader:  cfg2.Load,
+			loader:  noCtxLoad(cfg2.Load),
 			upmiger: upmig2.NewUpMig,
 			dnmiger: dnmig2.NewDnMig,
 		}, nil
@@ -86,13 +116,23 @@ func LoadMigrator(path string) (
 	}
 }
 
-// Migrator of C is a generic interface which adapts version-specific
-// configuration settings data (contained in a C type instance which
-// conforms to the settings.Config[C] interface) in order to provide the
+func noCtxLoad[C any](
+	loader func(data []byte) (C, error),
+) func(ctx context.Context, data []byte) (C, bool, error) {
+	return func(_ context.Context, data []byte) (C, bool, error) {
+		c, err := loader(data)
+		return c, err == nil, err
+	}
+}
+
+// Migrator of C and S is a generic interface, adapting version-specific
+// configuration settings (contained in a C type instance which conforms
+// to the settings.Config[C, S] interface) in order to provide the
 // version-independent repo.Migrator[migrationuc.Settings] interface.
-// Migrator[C] struct instances are created by the LoadMigrator function
-// wrapping the configuration settings data as a byte slice without
-// parsing its fields (beyond the settings format version).
+// Migrator[C, S] struct instances are created by the LoadMigrator
+// function (without DB overriding) or the LoadSrcMigrator (with DB
+// overriding), wrapping the configuration settings data as a byte slice
+// without parsing its fields (beyond the settings format version).
 //
 // Following the logic of repo.Migrator[migrationuc.Settings] interface,
 // migration follows three main steps.
@@ -106,7 +146,9 @@ func LoadMigrator(path string) (
 // performed in this phase too. Thereafter, complete source
 // configuration settings are available in memory as an instance of the
 // C type parameter.
-// The `loader` function may be reified by cfgN.Load functions.
+// The `loader` function may be reified by cfgN.Load functions if
+// no DB overriding is required or by cfgN.LoadFromDB functions if
+// the DB overriding is desired.
 //
 // Second, an upwards or downwards migrator object should be created.
 // This step is responsible to migrate from the current minor version
@@ -149,15 +191,18 @@ func LoadMigrator(path string) (
 // fill those fields which must match with their destination values
 // unconditionally (such as the database connection information which
 // must be renewed after each migration).
+// The merged migrationuc.Settings instance should be used for
+// computation of the corresponding mutable settings, so they may be
+// stored in the destination database too.
 //
-// Migrator[C] struct consolidates individual C type dependent
+// Migrator[C, S] struct consolidates individual C type dependent
 // loading and adaptation functions from the cfgN, upmigN, and dnmigN
 // packages and provides repo.Migrator[migrationuc.Settings] interface
 // so all supported major versions can be handled uniformly by the
-// LoadMigrator function.
-type Migrator[C settings.Config[C]] struct {
+// LoadMigrator and LoadSrcMigrator functions.
+type Migrator[C settings.Config[C, S], S any] struct {
 	data    []byte
-	loader  func(data []byte) (C, error)
+	loader  func(ctx context.Context, data []byte) (C, bool, error)
 	upmiger func(c C) repo.UpMigrator[migrationuc.Settings]
 	dnmiger func(c C) repo.DownMigrator[migrationuc.Settings]
 
@@ -165,34 +210,40 @@ type Migrator[C settings.Config[C]] struct {
 }
 
 // Load uses a C loader function (which must be provided during the
-// instantiation of Migrator[C] struct) in order to parse the settings
+// instantiation of Migrator[C, S] struct) in order to parse settings
 // data byte slice (which is known from the instantiation time too).
 // Parsed C instance will be kept in the `m` instance. If such an
 // instance was parsed/loaded previously, Load returns nil and causes
 // no changes. Returned error (if any) is from the underlying `loader`
 // function.
 // If loading and overriding of settings from the database contents are
-// desired, creation of a temporary database connection, and loading
+// desired, creation of a temporary database connection, and loading of
 // database information (e.g., using a LoadFromDB method) should be
 // performed by this method too.
-func (m *Migrator[C]) Load(_ context.Context) error {
+//
+// If configuration settings could be loaded considering the data byte
+// slice alone, but could not be overridden by database contents, the
+// Load method may succeed partially. In this case, parsed C instance
+// will be kept and may be used by other methods (like the scenario that
+// no database contents overriding was desired), however, a non-nil
+// error will be returned too.
+func (m *Migrator[C, S]) Load(ctx context.Context) error {
 	if m.c != nil {
 		return nil
 	}
-	c, err := m.loader(m.data)
-	if err != nil {
-		return err
+	c, configIsReturned, err := m.loader(ctx, m.data)
+	if configIsReturned {
+		m.c = &c
 	}
-	m.c = &c
-	return nil
+	return err
 }
 
-// MajorVersion returns the major semantic version of this Migrator[C]
+// MajorVersion returns the major semantic version of Migrator[C, S]
 // instance. It reflects the major version of a configuration file and
 // its value only depends on the C config type. This method may be
 // used for identification of the migration versions path, passing
 // through the major versions one by one.
-func (m *Migrator[C]) MajorVersion() uint {
+func (m *Migrator[C, S]) MajorVersion() uint {
 	var c C
 	// MajorVersion only depends on the type of C and so can be called
 	// without calling Load and obtaining a non-zero instance of C
@@ -206,7 +257,7 @@ func (m *Migrator[C]) MajorVersion() uint {
 // This upwards migrator contains the C configuration settings at the
 // source format version and may convert them to their next major
 // version, moving one version forward at a time.
-func (m *Migrator[C]) UpMigrator(_ context.Context) (
+func (m *Migrator[C, S]) UpMigrator(_ context.Context) (
 	repo.UpMigrator[migrationuc.Settings], error,
 ) {
 	if m.c == nil {
@@ -222,7 +273,7 @@ func (m *Migrator[C]) UpMigrator(_ context.Context) (
 // This downwards migrator contains the C configuration settings at the
 // source format version and may convert them to their previous major
 // version, moving one version backward at a time.
-func (m *Migrator[C]) DownMigrator(_ context.Context) (
+func (m *Migrator[C, S]) DownMigrator(_ context.Context) (
 	repo.DownMigrator[migrationuc.Settings], error,
 ) {
 	if m.c == nil {
@@ -237,7 +288,7 @@ func (m *Migrator[C]) DownMigrator(_ context.Context) (
 // This method is useful if the source and destination versions have the
 // same major version. Nevethreless, the minor and patch versions will
 // be migrated to their latest supported versions.
-func (m *Migrator[C]) Settler(
+func (m *Migrator[C, S]) Settler(
 	ctx context.Context,
 ) (migrationuc.Settings, error) {
 	s, err := m.UpMigrator(ctx)

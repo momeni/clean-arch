@@ -14,6 +14,8 @@
 package vers
 
 import (
+	"fmt"
+
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"gopkg.in/yaml.v3"
 )
@@ -75,4 +77,20 @@ func Load(data []byte) (*Config, error) {
 		return nil, err
 	}
 	return vc, nil
+}
+
+// Validate returns an error if the configuration settings version which
+// is stored in the `vc` Config instance is not supported by the given
+// major and minor version arguments. That is, stored major version
+// must match with the major argument and the stored minor version must
+// be at most equal with the given minor version (not newer than it).
+func (vc *Config) Validate(major, minor uint) error {
+	v := vc.Versions.Config
+	if v[0] != major {
+		return fmt.Errorf("incompatible major version: %d", v[0])
+	}
+	if v[1] > minor {
+		return fmt.Errorf("unsupported minor version: %d", v[1])
+	}
+	return nil
 }
