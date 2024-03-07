@@ -68,7 +68,7 @@ func startWebServer(_ *cobra.Command, _ []string) error {
 	}
 	defer p.Close()
 	var e *gin.Engine = c.Gin.NewEngine()
-	if err = routes.Register(e, p, c.Usecases); err != nil {
+	if err = routes.Register(ctx, e, p, c); err != nil {
 		return fmt.Errorf("registering routes: %w", err)
 	}
 	if err = e.Run(); err != nil {

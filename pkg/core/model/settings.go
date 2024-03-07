@@ -45,14 +45,14 @@ type VisibleSettings struct {
 	// ParkingMethod contains the old parking method related settings.
 	ParkingMethod ParkingMethodSettings `json:"parking_method"`
 
-	*ImmutableSettings
+	*ImmutableSettings `binding:"isdefault"`
 }
 
 // ParkingMethodSettings represents the old parking method related
 // settings. These settings are considered both visible and mutable.
 type ParkingMethodSettings struct {
 	// Delay represents the old parking method delay.
-	Delay *time.Duration `json:"delay"`
+	Delay *time.Duration `json:"delay" binding:"required"`
 }
 
 // ImmutableSettings contains settings which are immutable (and can be

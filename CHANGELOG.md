@@ -18,6 +18,10 @@ Remove this line after moving [Unreleased] to [1.2.0] - 2024-MM-DD.
 - Reload instantiated use case objects whenever the mutable settings are updated
 - Preserve comments in the configuration YAML files during the migration operation
 
+### Fixed
+
+- Return a bool ok flag from the DserXReq methods
+
 
 ## [1.1.0] - 2024-02-16
 

@@ -9,12 +9,15 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/momeni/clean-arch/pkg/adapter/config/cfg2"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/carsrp"
+	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/settingsrp"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/carsrs"
+	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/settingsrs"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 )
 
@@ -30,15 +33,24 @@ import (
 // interfaces with the REST APIs. These resources are registered as
 // request handlers using the e gin-gonic engine instance.
 // Possible errors will be returned after possible wrapping.
-func Register(e *gin.Engine, p repo.Pool, c cfg2.Usecases) error {
+// Actual instantiation of use case objects are delegated to the
+// c Config instance and the appuc use case.
+func Register(
+	ctx context.Context, e *gin.Engine, p repo.Pool, c *cfg2.Config,
+) error {
+	settingsRepo := settingsrp.New(c)
 	carsRepo := carsrp.New()
 
-	carsUseCase, err := c.Cars.NewUseCase(p, carsRepo)
+	appUseCase, err := c.NewAppUseCase(p, settingsRepo, carsRepo)
 	if err != nil {
-		return fmt.Errorf("creating cars use case: %w", err)
+		return fmt.Errorf("creating application use case: %w", err)
 	}
-
+	err = appUseCase.Reload(ctx)
+	if err != nil {
+		return fmt.Errorf("reloading use cases based on DB: %w", err)
+	}
 	r := e.Group("/api/caweb/v1")
-	carsrs.Register(r, carsUseCase)
+	settingsrs.Register(r, appUseCase)
+	carsrs.Register(r, appUseCase.CarsUseCase)
 	return nil
 }

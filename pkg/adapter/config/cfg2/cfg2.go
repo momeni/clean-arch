@@ -22,6 +22,7 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
+	"github.com/momeni/clean-arch/pkg/core/usecase/appuc"
 	"github.com/momeni/clean-arch/pkg/core/usecase/carsuc"
 	"gopkg.in/yaml.v3"
 )
@@ -181,6 +182,30 @@ func (c *Config) SchemaVersion() model.SemVer {
 // SchemaVersion method.
 func (c *Config) SetSchemaVersion(sv model.SemVer) {
 	c.Vers.Versions.Database = sv
+}
+
+// NewAppUseCase instantiates a new application management use case.
+// Instantiated use case needs a settings repository (and access to the
+// connection pool) in order to query and update the mutable settings.
+// It also needs to know about the configuration file contents which
+// should be overridden by the database contents. However, the
+// repository instance can manage this relationship with the
+// configuration file contents (in the adapters layer), allowing the
+// application use case to solely deal with the model layer settings.
+// The settings repository must take the `c` Config instance during its
+// instantiation.
+func (c *Config) NewAppUseCase(
+	p repo.Pool, s appuc.SettingsRepo, carsRepo repo.Cars,
+) (*appuc.UseCase, error) {
+	return appuc.New(p, s, carsRepo)
+}
+
+// NewCarsUseCase instantiates a new cars use case based on the settings
+// in the c struct.
+func (c *Config) NewCarsUseCase(
+	p repo.Pool, r repo.Cars,
+) (*carsuc.UseCase, error) {
+	return c.Usecases.Cars.NewUseCase(p, r)
 }
 
 // Usecases contains the configuration settings for all use cases.

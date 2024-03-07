@@ -16,8 +16,8 @@ import (
 // be used to initialize database with development or production
 // suitable data as asked by the InitDev and InitProd methods.
 type InitDBUseCase struct {
-	schemaSettings SchemaSettings // settings for target database
-	schemaRepo     repo.Schema    // schema management repo
+	settings   Settings    // target settings
+	schemaRepo repo.Schema // schema management repo
 }
 
 // NewInitDB creates an InitDBUseCase instance, using the `ss` schema
@@ -28,10 +28,10 @@ type InitDBUseCase struct {
 // used for dropping and (re)creating an empty schema, creating normal
 // role, granting it privileges on the empty schema, and renewing the
 // passwords of admin and normal roles.
-func NewInitDB(ss SchemaSettings) *InitDBUseCase {
+func NewInitDB(ss Settings) *InitDBUseCase {
 	return &InitDBUseCase{
-		schemaSettings: ss,
-		schemaRepo:     ss.NewSchemaRepo(),
+		settings:   ss,
+		schemaRepo: ss.NewSchemaRepo(),
 	}
 }
 
@@ -84,19 +84,27 @@ func (iduc *InitDBUseCase) initDB(
 	if err := iduc.dropAndCreateAgain(ctx); err != nil {
 		return fmt.Errorf("dropping/recreating schema: %w", err)
 	}
-	p, err := iduc.schemaSettings.ConnectionPool(ctx, repo.NormalRole)
+	p, err := iduc.settings.ConnectionPool(ctx, repo.NormalRole)
 	if err != nil {
 		return fmt.Errorf("creating DB pool for normal role: %w", err)
 	}
 	defer p.Close()
 	err = p.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		return c.Tx(ctx, func(ctx context.Context, tx repo.Tx) error {
-			si, err := iduc.schemaSettings.SchemaInitializer(tx)
+			ms, err := iduc.settings.Serialize()
+			if err != nil {
+				return fmt.Errorf("obtaining mutable settings: %w", err)
+			}
+			si, err := iduc.settings.SchemaInitializer(tx)
 			if err != nil {
 				return fmt.Errorf("creating SchemaInitializer: %w", err)
 			}
 			if err := dbi(ctx, si); err != nil {
 				return fmt.Errorf("initializing schema: %w", err)
+			}
+			err = si.PersistSettings(ctx, ms)
+			if err != nil {
+				return fmt.Errorf("saving mutable settings: %w", err)
 			}
 			return nil
 		})
@@ -110,7 +118,7 @@ func (iduc *InitDBUseCase) initDB(
 func (iduc *InitDBUseCase) dropAndCreateAgain(
 	ctx context.Context,
 ) error {
-	p, err := iduc.schemaSettings.ConnectionPool(ctx, repo.AdminRole)
+	p, err := iduc.settings.ConnectionPool(ctx, repo.AdminRole)
 	if err != nil {
 		return fmt.Errorf("creating DB pool for admin: %w", err)
 	}
@@ -119,7 +127,7 @@ func (iduc *InitDBUseCase) dropAndCreateAgain(
 	err = p.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		return c.Tx(ctx, func(ctx context.Context, tx repo.Tx) error {
 			q := iduc.schemaRepo.Tx(tx)
-			v := iduc.schemaSettings.SchemaVersion()
+			v := iduc.settings.SchemaVersion()
 			sn := SchemaName(v[0])
 			if err := q.DropIfExists(ctx, sn); err != nil {
 				return fmt.Errorf("dropping %q: %w", sn, err)
@@ -145,7 +153,7 @@ func (iduc *InitDBUseCase) dropAndCreateAgain(
 					sn, err,
 				)
 			}
-			finalizer, err = iduc.schemaSettings.RenewPasswords(
+			finalizer, err = iduc.settings.RenewPasswords(
 				ctx, q.ChangePasswords, repo.AdminRole, repo.NormalRole,
 			)
 			if err != nil {

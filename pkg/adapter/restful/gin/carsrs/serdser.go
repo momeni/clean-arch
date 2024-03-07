@@ -50,11 +50,13 @@ func (sc StrCoordinate) ToModel() (c model.Coordinate, err error) {
 	return
 }
 
-func (rs *resource) DserUpdateCarReq(c *gin.Context) *carUpdateReq {
+func (rs *resource) DserUpdateCarReq(
+	c *gin.Context,
+) (*carUpdateReq, bool) {
 	req := &rawCarUpdateReq{}
 	val := &carUpdateReq{}
 	if ok := serdser.Bind(c, req, binding.Form); !ok {
-		return nil
+		return nil, false
 	}
 	var errs map[string][]string
 	defer func() {
@@ -66,7 +68,7 @@ func (rs *resource) DserUpdateCarReq(c *gin.Context) *carUpdateReq {
 	val.CarID, err = uuid.Parse(c.Param("cid"))
 	if err != nil {
 		serdser.AddErr(&errs, "cid", "Path param cid is not UUID.")
-		return nil
+		return nil, false
 	}
 	val.Op = req.Op
 	switch req.Op {
@@ -100,7 +102,7 @@ func (rs *resource) DserUpdateCarReq(c *gin.Context) *carUpdateReq {
 		panic("unknown op")
 	}
 	if errs == nil {
-		return val
+		return val, true
 	}
-	return nil
+	return nil, false
 }

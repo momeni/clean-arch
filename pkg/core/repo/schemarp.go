@@ -91,6 +91,11 @@ type SettingsPersister interface {
 // for finding the destination database (such as a database transaction)
 // so the SchemaInitializer does not need to take any argument.
 type SchemaInitializer interface {
+	// SettingsPersister interface indicates that SchemaInitializer,
+	// in addition to the database schema initialization, can persist
+	// the independently serialized mutable settings in the database.
+	SettingsPersister
+
 	// InitDevSchema creates tables in an existing database schema
 	// and fills them with the development suitable initial data.
 	// The database connection, target schema name, tables format, and
