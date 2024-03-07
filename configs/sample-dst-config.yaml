@@ -5,17 +5,41 @@
 
 ---
 database:
+  # host IP address or name, although IP should be preferred as it
+  # requires no translation (even localhost from the /etc/hosts file)
   host: 127.0.0.1
+  # port number
   port: 5456
+  # database name which should contain complete semantic version
   name: caweb1_1_0
-  role: caweb
+  # passwords directory should contain a .pgpass or .pgpass.new file
+  # containing the PostgreSQL standard password lines following this
+  # format:  127.0.0.1:5456:caweb1_0_0:caweb:tHePaSsWoRd
   pass-dir: dist/.db/caweb1_1_0
 gin:
   logger: true
   recovery: true
+# The use cases specific configuration items are kept here which are
+# used for instantiation of those use cases. Although it works well
+# in this sample project, in a larger scale project, a different
+# set of categories which do not necessarily align with the use cases
+# may be useful. So, consider your project requirements and find
+# their natural configuration settings categories.
 usecases:
   cars:
     delay-of-old-parking-method: 15s
+# Versions are not settings themselves. For example, if we were talking
+# about the caweb Golang module version, it would find its place in a
+# const definition in some package (to be printed by a "version" command
+# as an example). However, following settings provide hints to know how
+# other settings are formatted. That is, a loader needs to check the
+# config version before knowing that "old-parking-method-delay" field
+# should be expected or "delay-of-old-parking-method" field. Similarly,
+# the database version informs us that which tables with which columns
+# are expected to be seen, so a proper migration plan may be set.
+# In this sense, these settings are immutable.
 versions:
+  # semantic version of the database schema
   database: 1.1.0
+  # semantic version of the configuration file itself
   config: 2.0.0

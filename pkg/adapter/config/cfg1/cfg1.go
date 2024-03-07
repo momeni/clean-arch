@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momeni/clean-arch/pkg/adapter/config/comment"
 	"github.com/momeni/clean-arch/pkg/adapter/config/settings"
 	"github.com/momeni/clean-arch/pkg/adapter/config/vers"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
@@ -65,6 +66,19 @@ type Config struct {
 	// strings corresponding to this Config instance and its Database
 	// target.
 	Vers vers.Config `yaml:",inline"`
+
+	// Comments contains the YAML comment lines which are written right
+	// before the actual settings lines, aka head-comments.
+	// These comments are preserved for top-level settings and their
+	// children sequence and mapping YAML nodes. The Comments may be nil
+	// which will be ignored, or may be poppulated with some comments
+	// which will be preserved during a marshaling operation by the
+	// multi-database migration operation. Indeed, Comments field is
+	// only useful when the destination configuration file is loaded
+	// during a migration operation because the MergeConfig method
+	// preserves the destination Comments field, so the new comments
+	// may be seen in the target config file.
+	Comments *comment.Comment `yaml:"-"`
 }
 
 // Database contains the database related configuration settings.
@@ -517,13 +531,27 @@ func (c Cars) NewUseCase(
 // contents may change continually and their loading must be performed
 // by a separate method, such as LoadFromDB).
 func Load(data []byte) (*Config, error) {
-	c := &Config{}
-	if err := yaml.Unmarshal(data, c); err != nil {
+	n := &yaml.Node{}
+	if err := yaml.Unmarshal(data, n); err != nil {
 		return nil, fmt.Errorf("unmarshalling yaml: %w", err)
+	}
+	if l := len(n.Content); l != 1 {
+		return nil, fmt.Errorf(
+			"found %d children nodes, instead of 1 mapping child", l,
+		)
+	}
+	c := &Config{}
+	if err := n.Decode(c); err != nil {
+		return nil, fmt.Errorf("decoding yaml node: %w", err)
 	}
 	if err := c.ValidateAndNormalize(); err != nil {
 		return nil, fmt.Errorf("validating configs: %w", err)
 	}
+	cmnts, err := comment.LoadFrom(n.Content[0])
+	if err != nil {
+		return nil, fmt.Errorf("parsing comments: %w", err)
+	}
+	c.Comments = cmnts
 	return c, nil
 }
 
@@ -620,17 +648,27 @@ type Marshalled struct {
 	Vers *vers.Marshalled `yaml:",inline"`
 }
 
-// MarshalYAML returns an instance of the Marshalled struct, as created
+// MarshalYAML computes an instance of the Marshalled struct, as created
 // by the Marshal method, so it may be marshalled instead of the `c`
 // Config instance. This replacement makes it possible to substitute
 // specific settings such as a slices of numbers in a vers.Config with
 // their alternative primitive data types and have control on the final
-// serialization result.
+// serialization result. Thereafter, it encodes *Marshalled as a yaml
+// node instance and saves the preserved head `c.Comments` (if any) into
+// the resulting *yaml.Node instance (and returns it as an interface{}).
 //
 // See the Marshal function for the reification details and how
 // marshaling logic can be distributed among nested Config structs.
 func (c *Config) MarshalYAML() (interface{}, error) {
-	return c.Marshal(), nil
+	m := c.Marshal()
+	n := &yaml.Node{}
+	if err := n.Encode(m); err != nil {
+		return nil, fmt.Errorf("encoding *Marshalled as YAML: %w", err)
+	}
+	if err := c.Comments.SaveInto(n); err != nil {
+		return nil, fmt.Errorf("saving YAML nodes comments: %w", err)
+	}
+	return n, nil
 }
 
 // Marshal creates an instance of the Marshalled struct and fills it
@@ -718,6 +756,8 @@ func (c *Config) Clone() *Config {
 // unconditionally. The database version number will be set to its
 // latest supported version too, having the same major version as
 // specified in `c2` instance.
+// The Comments field takes its value from the `c2` instance, ignoring
+// comments of the `c` instance (if any).
 func (c *Config) MergeConfig(c2 *Config) error {
 	c.Database = c2.Database
 
@@ -733,6 +773,7 @@ func (c *Config) MergeConfig(c2 *Config) error {
 		return err
 	}
 	c.Vers.Versions.Database = sv
+	c.Comments = c2.Comments
 	return nil
 }
 

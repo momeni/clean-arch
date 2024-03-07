@@ -102,3 +102,18 @@ dst-db-psql: dst-db
 .PHONY: grep
 grep:
 	grep -R --exclude-dir=.git --exclude-dir=dist ${ARGS} .
+
+.PHONY: manual-migration-test
+manual-migration-test: build
+	podman stop caweb1_0_0-pg16-dbms
+	podman stop caweb1_1_0-pg16-dbms
+	for dir in "$(SRC_DB_DIR)" "$(DST_DB_DIR)"; do \
+		podman unshare rm -rf "$$dir" && mkdir -p "$$dir"; \
+	done
+	$(MAKE) src-db dst-db
+	sleep 5
+	./$(TARGET) db init-dev --config configs/sample-src-config.yaml
+	./$(TARGET) db migrate configs/sample-src-config.yaml \
+		configs/sample-dst-config.yaml \
+		--config configs/sample-config.yaml
+	echo "Check configs/sample-config.yaml as the target config file."

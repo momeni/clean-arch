@@ -4,12 +4,21 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 ---
+# We can write comments in YAML format explaining settings
+# using pre-pended comment lines (comment lines which follow
+# a value and comments which are written at the end of a line
+# should be avoided as they cannot be preserved easily and unambiguously
+# during an automated migration operation).
+# Comments of the src config file will be ignored.
+# Comments of the dst config file will be used.
 database:
   host: 127.0.0.1
-  port: 5455
+  port: 5455 # this comment which is written at the end of line is bad
+  # but this comment which is written before the name setting is good
   name: caweb1_0_0
-  role: caweb
   pass-dir: dist/.db/caweb1_0_0
+  # and a comment following pass-dir is bad too as it may be thought
+  # to be written before the following gin setting!
 gin:
   logger: true
   recovery: true
