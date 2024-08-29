@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+Remove this line after moving [Unreleased] to [1.3.0] - 2024-MM-DD.
+
+### Added
+
+- Accept minimum/maximum bounds for configuration settings from the configuration file
+- Store configuration settings minimum/maximum bounds in the database, so other updaters may respect them
+- Respect the target version settings bounds during a migration operation
+- Report configuration settings bounds whenever the settings are reported themselves
+- Demonstrate how the standard `log/slog` structured logging may be used
+
+### Changed
+
+- Avoid updating settings in the database if they cannot be used for instantiation of new use cases
+
+
 ## [1.2.0] - 2024-03-07
 
 ### Added
