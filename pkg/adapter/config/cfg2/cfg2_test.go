@@ -28,6 +28,8 @@ var _ settings.Config[*cfg2.Config, cfg2.Serializable] = (*cfg2.Config)(nil)
 
 func ExampleMarshalYAML() {
 	d, l, r := settings.Duration(time.Hour), true, true
+	minb := settings.Duration(time.Second)
+	maxb := settings.Duration(5 * time.Hour)
 	c := &cfg2.Config{
 		Database: cfg1.Database{
 			Host:    "127.0.0.1",
@@ -41,7 +43,9 @@ func ExampleMarshalYAML() {
 		},
 		Usecases: cfg2.Usecases{
 			Cars: cfg2.Cars{
-				DelayOfOPM: &d,
+				DelayOfOPM:    &d,
+				MinDelayOfOPM: &minb,
+				MaxDelayOfOPM: &maxb,
 			},
 		},
 		Vers: vers.Config{
@@ -67,6 +71,8 @@ func ExampleMarshalYAML() {
 	// usecases:
 	//     cars:
 	//         delay-of-old-parking-method: 1h
+	//         delay-of-old-parking-method-minimum: 1s
+	//         delay-of-old-parking-method-maximum: 5h
 	// versions:
 	//     database: 1.4.5
 	//     config: 5.4.1

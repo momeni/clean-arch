@@ -32,7 +32,7 @@ import (
 // configuration settings which are supported by the Config struct.
 const (
 	Major = 2
-	Minor = 0
+	Minor = 1
 	Patch = 0
 )
 
@@ -238,6 +238,14 @@ type Cars struct {
 	// DelayOfOPM indicates the amount of delay that an
 	// old parking method should incur.
 	DelayOfOPM *settings.Duration `yaml:"delay-of-old-parking-method"`
+	// MinDelayOfOPM is the inclusive minimum acceptable value
+	// for the DelayOfOPM setting.
+	// A missing value indicates that there is no lower bound.
+	MinDelayOfOPM *settings.Duration `yaml:"delay-of-old-parking-method-minimum"`
+	// MaxDelayOfOPM is the inclusive maximum acceptable value
+	// for the DelayOfOPM setting.
+	// A missing value indicates that there is no upper bound.
+	MaxDelayOfOPM *settings.Duration `yaml:"delay-of-old-parking-method-maximum"`
 }
 
 // NewUseCase instantiates a new cars use case based on the settings
@@ -365,6 +373,19 @@ func (c *Config) ValidateAndNormalize() error {
 	if err := c.Database.ValidateAndNormalize(); err != nil {
 		return fmt.Errorf("validating database settings: %w", err)
 	}
+	if err := settings.VerifyRange(
+		&c.Usecases.Cars.DelayOfOPM,
+		c.Usecases.Cars.MinDelayOfOPM,
+		c.Usecases.Cars.MaxDelayOfOPM,
+	); err != nil {
+		return fmt.Errorf(
+			"VerifyRange(delay of opm=%v, minb=%v, maxb=%v): %w",
+			err.Value,
+			c.Usecases.Cars.MinDelayOfOPM,
+			c.Usecases.Cars.MaxDelayOfOPM,
+			err,
+		)
+	}
 	return nil
 }
 
@@ -380,7 +401,9 @@ type Marshalled struct {
 	Gin      cfg1.Gin
 	Usecases struct {
 		Cars struct {
-			Delay *string `yaml:"delay-of-old-parking-method,omitempty"`
+			Delay    *string `yaml:"delay-of-old-parking-method,omitempty"`
+			MinDelay *string `yaml:"delay-of-old-parking-method-minimum,omitempty"`
+			MaxDelay *string `yaml:"delay-of-old-parking-method-maximum,omitempty"`
 		}
 	}
 	Vers *vers.Marshalled `yaml:",inline"`
@@ -428,6 +451,8 @@ func (c *Config) Marshal() *Marshalled {
 	m.Database = c.Database
 	m.Gin = c.Gin
 	m.Usecases.Cars.Delay = c.Usecases.Cars.DelayOfOPM.Marshal()
+	m.Usecases.Cars.MinDelay = c.Usecases.Cars.MinDelayOfOPM.Marshal()
+	m.Usecases.Cars.MaxDelay = c.Usecases.Cars.MaxDelayOfOPM.Marshal()
 	m.Vers = c.Vers.Marshal()
 	return m
 }
@@ -471,18 +496,17 @@ func (c *Config) Clone() *Config {
 		Database: c.Database,
 		Vers:     c.Vers,
 	}
-	if c.Gin.Logger != nil {
-		l := *c.Gin.Logger
-		cc.Gin.Logger = &l
-	}
-	if c.Gin.Recovery != nil {
-		r := *c.Gin.Recovery
-		cc.Gin.Recovery = &r
-	}
-	if c.Usecases.Cars.DelayOfOPM != nil {
-		doo := *c.Usecases.Cars.DelayOfOPM
-		cc.Usecases.Cars.DelayOfOPM = &doo
-	}
+	settings.OverwriteUnconditionally(&cc.Gin.Logger, c.Gin.Logger)
+	settings.OverwriteUnconditionally(&cc.Gin.Recovery, c.Gin.Recovery)
+	settings.OverwriteUnconditionally(
+		&cc.Usecases.Cars.DelayOfOPM, c.Usecases.Cars.DelayOfOPM,
+	)
+	settings.OverwriteUnconditionally(
+		&cc.Usecases.Cars.MinDelayOfOPM, c.Usecases.Cars.MinDelayOfOPM,
+	)
+	settings.OverwriteUnconditionally(
+		&cc.Usecases.Cars.MaxDelayOfOPM, c.Usecases.Cars.MaxDelayOfOPM,
+	)
 	return cc
 }
 

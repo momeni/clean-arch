@@ -25,6 +25,8 @@ gin:
 usecases:
   cars:
     old-parking-method-delay: 15s
+    old-parking-method-delay-minimum: 1s
+    old-parking-method-delay-maximum: 5m
 versions:
   database: 1.0.0
-  config: 1.0.0
+  config: 1.1.0

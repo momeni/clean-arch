@@ -28,6 +28,14 @@ gin:
 usecases:
   cars:
     delay-of-old-parking-method: 15s
+    # the inclusive minimum value which may be used for the
+    # delay-of-old-parking-method setting (which will be unrestricted
+    # by default, if commented out)
+    delay-of-old-parking-method-minimum: 1s
+    # the inclusive maximum value which may be used for the
+    # delay-of-old-parking-method setting (which will be unrestricted
+    # by default, if commented out)
+    delay-of-old-parking-method-maximum: 5m
 # Versions are not settings themselves. For example, if we were talking
 # about the caweb Golang module version, it would find its place in a
 # const definition in some package (to be printed by a "version" command
@@ -42,4 +50,4 @@ versions:
   # semantic version of the database schema
   database: 1.1.0
   # semantic version of the configuration file itself
-  config: 2.0.0
+  config: 2.1.0
