@@ -21,6 +21,7 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/config/settings"
 	"github.com/momeni/clean-arch/pkg/adapter/config/vers"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration"
+	"github.com/momeni/clean-arch/pkg/core/log"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/appuc"
@@ -520,6 +521,11 @@ func (c *Config) Clone() *Config {
 // specified in `c2` instance.
 // The Comments field takes its value from the `c2` instance, ignoring
 // comments of the `c` instance (if any).
+// Similarly, the boundary values are copied from the `c2` because the
+// target boundary values should be respected after migration. By the
+// way, settings may fail to fit in the expected range of boundary
+// values. In this case, they will take the nearest (minimum/maximum)
+// value and the violated boundaries will be logged as warning.
 func (c *Config) MergeConfig(c2 *Config) error {
 	c.Database = c2.Database
 	settings.OverwriteNil(&c.Gin.Logger, c2.Gin.Logger)
@@ -527,6 +533,26 @@ func (c *Config) MergeConfig(c2 *Config) error {
 	settings.OverwriteNil(
 		&c.Usecases.Cars.DelayOfOPM, c2.Usecases.Cars.DelayOfOPM,
 	)
+	settings.OverwriteUnconditionally(
+		&c.Usecases.Cars.MinDelayOfOPM, c2.Usecases.Cars.MinDelayOfOPM,
+	)
+	settings.OverwriteUnconditionally(
+		&c.Usecases.Cars.MaxDelayOfOPM, c2.Usecases.Cars.MaxDelayOfOPM,
+	)
+	if err := settings.VerifyRange(
+		&c.Usecases.Cars.DelayOfOPM,
+		c.Usecases.Cars.MinDelayOfOPM,
+		c.Usecases.Cars.MaxDelayOfOPM,
+	); err != nil {
+		log.Warn(
+			context.TODO(),
+			"delay of opm is adjusted by boundary values",
+			log.Valuer("value", err.Value),
+			log.Valuer("minb", c.Usecases.Cars.MinDelayOfOPM),
+			log.Valuer("maxb", c.Usecases.Cars.MaxDelayOfOPM),
+			log.Err("violation", err),
+		)
+	}
 	c.Vers.Versions.Config = model.SemVer{Major, Minor, Patch}
 	sv, err := migration.LatestVersion(c2.SchemaVersion())
 	if err != nil {

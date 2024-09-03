@@ -7,6 +7,7 @@ package settings
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -66,4 +67,14 @@ func (d *Duration) MarshalText() ([]byte, error) {
 		return []byte(*s), nil
 	}
 	return nil, errors.New("nil duration")
+}
+
+// LogValue implements slog.LogValuer and returns a DurationValue if
+// this Duration is not nil, otherwise, it returns a StringValue with
+// the constant "nil-duration" value.
+func (d *Duration) LogValue() slog.Value {
+	if d == nil {
+		return slog.StringValue("nil-duration")
+	}
+	return slog.DurationValue(time.Duration(*d))
 }
