@@ -119,6 +119,39 @@ and database. For simplicity, we can assume that settings which are
 stored in a configuration file and a database, both follow a common
 configuration version.
 
+When developing a frontend for modification of the mutable settings,
+we can validate user inputs based on the expected data types of those
+settings. Since the data type of a setting is as stable as its chosen
+name, it is reasonable to make frontend implementation dependent on
+them. However, their acceptable ranges of values which are representable
+by an inclusive minimum and maximum values for each numeric setting
+may change among versions, or they may be computed dynamically too.
+Since v1.3, the minimum and maximum values of numeric settings are also
+taken from the configuration file, supported during the migration where
+the target version bounds are accepted (since they match with the target
+executable code), reported through the same RESTful APIs which could
+communicate the settings, and persisted in the database so other
+components may read and respect them when updating the mutable settings.
+
+For each settings such as **sample**, two accompanying settings may be
+provided like **sample-minimum** and **sample-maximum** providing the
+corresponding inclusive minimum and maximum values. In the database,
+two new columns, namely **min_bounds** and **max_bounds**, are stored
+with the same format that the main **config** column had in order to
+report those lower/upper bounds. If one of those boundary values is not
+included, it means that there is no such restriction.
+If a setting was optional and received a nil value, it does not need to
+be compared by its minimum/maximum boundary values. The fact that a nil
+value is or is not acceptable is part of the data type which is not
+communicated in v1.3 (since it is a static piece of data).
+If a use case needs to distinguish between a nil value and a value which
+is not sent at all, e.g., when a restriction is not applied (by some
+switch button in the frontend) or is applied but its restrictive value
+is set to nil (asking for some default value for example), an extra bool
+setting can eliminate the ambiguity. For example, **sample_set** may be
+false, indicating that **sample** is not sent at all, or it may be true,
+indicating that **sample** is sent and may or may not have a nil value.
+
 ## Versioning and Migration
 
 As user requirements evolve, software products need to be changed so
