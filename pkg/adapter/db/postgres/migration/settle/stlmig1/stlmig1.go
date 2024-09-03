@@ -39,7 +39,7 @@ import (
 // supported minor version within the Major major version series.
 const (
 	Major = 1
-	Minor = 1
+	Minor = 2
 	Patch = 0
 )
 
@@ -172,13 +172,20 @@ func (sm1 *Settler) MajorVersion() uint {
 // serialized form of the system mutable configuration settings, using
 // the transaction which is hold by `sm1` object. This persistence will
 // take effect whenever the caller could commit its transaction.
+// The minb and maxb are also persisted as the minimum and maximum
+// boundary values for all (mutable and immutable) settings, serialized
+// with the same format which is used for mutableSettings.
 func (sm1 *Settler) PersistSettings(
-	ctx context.Context, mutableSettings []byte,
+	ctx context.Context, mutableSettings, minb, maxb []byte,
 ) error {
 	switch count, err := sm1.tx.Exec(
 		ctx,
-		"UPDATE settings SET config=$1 WHERE component='caweb'",
+		`UPDATE settings
+SET config=$1, min_bounds=$2, max_bounds=$3
+WHERE component='caweb'`,
 		mutableSettings,
+		minb,
+		maxb,
 	); {
 	case err != nil:
 		return fmt.Errorf("updating caweb settings row: %w", err)

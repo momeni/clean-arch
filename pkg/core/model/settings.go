@@ -22,6 +22,14 @@ import "time"
 // layer. A repository package is responsible to manage conversion
 // between these structs (only supporting the latest configuration
 // version at any time).
+//
+// All fields should have pointer types because Settings has two usages,
+// (1) to represent the settings themselves, and (2) to represent the
+// acceptable boundary values for those settings. Since each setting
+// may or may not have a lower/upper boundary value, all fields need to
+// accept nil as an unrestricted boundary. A non-pointer type is only
+// justified if a setting and its minimum/maximum boundary values are
+// always required.
 type Settings struct {
 	VisibleSettings
 }
@@ -68,5 +76,9 @@ type ParkingMethodSettings struct {
 // version at any time).
 type ImmutableSettings struct {
 	// Logger reports if server-side REST API logging is enabled.
-	Logger bool `json:"logger"`
+	//
+	// This field must always have a non-nil value when it represents
+	// the setting value and must always be nil when it represents the
+	// boundary values.
+	Logger *bool `json:"logger"`
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v0"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v1"
+	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v2"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/settle/stlmig1"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
@@ -134,6 +135,8 @@ func New(tx repo.Tx, v model.SemVer, url string) (
 			return sch1v0.New(tx, url), nil
 		case 1:
 			return sch1v1.New(tx, url), nil
+		case 2:
+			return sch1v2.New(tx, url), nil
 		default:
 			return nil, fmt.Errorf("unsupported minor: %d", minor)
 		}
@@ -157,6 +160,8 @@ func LoadSettings(ctx context.Context, c repo.Conn, v model.SemVer) (
 			return sch1v0.LoadSettings(ctx, c)
 		case 1:
 			return sch1v1.LoadSettings(ctx, c)
+		case 2:
+			return sch1v2.LoadSettings(ctx, c)
 		default:
 			return nil, fmt.Errorf("unsupported minor: %d", minor)
 		}

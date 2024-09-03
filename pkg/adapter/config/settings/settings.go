@@ -14,10 +14,12 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/goccy/go-json"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration"
+	"github.com/momeni/clean-arch/pkg/core/log"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
@@ -101,6 +103,11 @@ type Config[C, S any] interface {
 	// presented by the `c` argument. The database version number will
 	// be set to its latest supported version too, having the same major
 	// version as specified in the `c` instance.
+	//
+	// Boundary values are initialized based on the `c` instance and
+	// settings with out of range values will take the nearest valid
+	// values (from a minimum/maximum boundary value), logging the
+	// adjustment as a warning.
 	MergeConfig(c C) error
 
 	// Version returns the semantic version of this Config[C, S] struct
@@ -129,11 +136,40 @@ type Config[C, S any] interface {
 	// it may not contain the immutable settings. The provided S
 	// instance is not updated itself, hence, a non-pointer variable
 	// is suitable.
+	//
+	// If provided values do not respect the expected boundary values,
+	// an error which implements BoundsError interface will be returned,
+	// indicating that which settings were out of bound, however, this
+	// type of error does not prevent this Config[C, S] instance to be
+	// updated. When a minimum/maximum boundary value is crossed over,
+	// that boundary value itself will be used as the new value of that
+	// setting.
 	Mutate(s S) error
 
 	// Serializable creates and returns an instance of *S in order to
 	// report the mutable settings, based on this Config[C, S] instance.
 	Serializable() *S
+
+	// Bounds creates and returns two instances of *S in order to
+	// report the minimum and maximum boundary values for those settings
+	// which their lower/upper limits should be restricted.
+	// The boundary values may be reported for both of the mutable and
+	// immutable settings (as they have an informational purpose).
+	// All boundary values are obtained from this Config[C, S] instance.
+	Bounds() (minb, maxb *S)
+}
+
+// BoundsError indicates that some of the configuration settings have
+// a value which is out of their acceptable range of values.
+// BoundsError is implemented by *OutOfBoundsSettingsError from the
+// version specific configuration packages such as cfg1 and so on.
+type BoundsError interface {
+	error
+
+	// IsBoundsError is a marker method, so the boundary values
+	// violation error types can be distinguished from other error
+	// types in a version-independent manner.
+	IsBoundsError()
 }
 
 // Adapter of C and S is a generic struct which wraps and adapts an
@@ -167,6 +203,11 @@ func (a Adapter[C, S]) Clone() migrationuc.Settings {
 // Some settings, such as the database connection information, are
 // unconditionally taken from the `s` argument because they need to
 // describe the destination settings values.
+//
+// Boundary values are initialized based on the `s` argument and
+// settings with out of range values will take the nearest valid
+// values (from a minimum/maximum boundary value), logging the
+// adjustment as a warning.
 func (a Adapter[C, S]) MergeSettings(s migrationuc.Settings) error {
 	c, ok := s.(Dereferencer[C])
 	if !ok {
@@ -178,12 +219,31 @@ func (a Adapter[C, S]) MergeSettings(s migrationuc.Settings) error {
 // Serialize finds out about the mutable settings of its embedded Config
 // instance using the Serializable method, then tries to serialize it
 // as a json string.
+// It also obtains minimum and maximum boundary values for all mutable
+// and immutable settings using the Bounds method and returns their
+// serialized form as two other json strings.
 // Any returned error belongs to the json serialization phase.
 // This serialization decouples the configuration settings format from
 // the database schema format versions.
-func (a Adapter[C, S]) Serialize() ([]byte, error) {
+func (a Adapter[C, S]) Serialize() (ms, minb, maxb []byte, err error) {
 	s := a.Config.Serializable()
-	return json.Marshal(s)
+	ms, err = json.Marshal(s)
+	if err != nil {
+		err = fmt.Errorf("marshalling settings: %w", err)
+		return nil, nil, nil, err
+	}
+	lb, ub := a.Config.Bounds()
+	minb, err = json.Marshal(lb)
+	if err != nil {
+		err = fmt.Errorf("marshalling minimum bounds: %w", err)
+		return nil, nil, nil, err
+	}
+	maxb, err = json.Marshal(ub)
+	if err != nil {
+		err = fmt.Errorf("marshalling maximum bounds: %w", err)
+		return nil, nil, nil, err
+	}
+	return ms, minb, maxb, nil
 }
 
 // UpMigrator of C, S, and U describes the expected interface of a
@@ -310,9 +370,11 @@ type DownMigrator[C Config[C, S], S, D any] interface {
 // in order to obtain the serialized mutable settings (which must follow
 // the same version is used by `c`). LoadFromDB also deserializes the
 // queried settings in order to obtain an instance of S type and
-// updated the `c` argument in place using its Mutate method.
+// updates the `c` argument in place using its Mutate method.
 // Errors will be returned by proper wrapping.
 // In case of errors, the `c` will remain unchanged.
+// In case of a BoundsError error, the `c` will be updated and that
+// error will be logged as a warning (and a nil error will be returned).
 func LoadFromDB[C, S any](ctx context.Context, c Config[C, S]) error {
 	dbVer := c.SchemaVersion()
 	ms, err := queryMutableSettings(ctx, c, dbVer)
@@ -326,7 +388,16 @@ func LoadFromDB[C, S any](ctx context.Context, c Config[C, S]) error {
 		return fmt.Errorf("decoding mutable settings: %w", err)
 	}
 	err = c.Mutate(*mutableSettings)
-	if err != nil {
+	var boundsErr BoundsError
+	switch {
+	case errors.As(err, &boundsErr):
+		log.Warn(
+			ctx,
+			"settings read from database are out of range",
+			log.Err("err", err),
+		)
+		return nil
+	case err != nil:
 		return fmt.Errorf("mutating settings: %w", err)
 	}
 	return nil

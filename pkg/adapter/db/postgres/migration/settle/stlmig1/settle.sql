@@ -9,8 +9,8 @@ INSERT INTO cars (cid, name, lat, lon, parked, parking_mode)
 SELECT cid, name, lat, lon, parked, parking_mode
     FROM mig1.cars;
 
-INSERT INTO settings (component, config)
-SELECT component, config
+INSERT INTO settings (component, config, min_bounds, max_bounds)
+SELECT component, config, min_bounds, max_bounds
     FROM mig1.settings;
 --  WHERE component!='caweb';
 --  -- we do not exclude the caweb settings because having that row in

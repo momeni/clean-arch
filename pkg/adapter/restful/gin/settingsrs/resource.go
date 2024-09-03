@@ -37,15 +37,23 @@ func (rs *resource) UpdateSettings(c *gin.Context) {
 	if !ok {
 		return
 	}
-	vs, err := rs.app.UpdateSettings(c, req)
+	vs, minb, maxb, err := rs.app.UpdateSettings(c, req)
 	if err != nil {
 		serdser.SerErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, vs)
+	c.JSON(http.StatusOK, SettingsResp{
+		Settings:  vs,
+		MinBounds: minb,
+		MaxBounds: maxb,
+	})
 }
 
 func (rs *resource) FetchSettings(c *gin.Context) {
-	vs := rs.app.Settings()
-	c.JSON(http.StatusOK, vs)
+	vs, minb, maxb := rs.app.Settings()
+	c.JSON(http.StatusOK, SettingsResp{
+		Settings:  vs,
+		MinBounds: minb,
+		MaxBounds: maxb,
+	})
 }

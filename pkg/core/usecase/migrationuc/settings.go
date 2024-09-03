@@ -180,15 +180,25 @@ type Settings interface {
 	// Some settings, such as the database connection information, are
 	// unconditionally taken from the `s` argument because they need to
 	// describe the destination settings values.
+	//
+	// Boundary values are initialized based on the `s` argument and
+	// settings with out of range values will take the nearest valid
+	// values (from a minimum/maximum boundary value), logging the
+	// adjustment as a warning.
 	MergeSettings(s Settings) error
 
 	// Serialize finds out about the mutable settings of this Settings
 	// instance and tries to serialize them as a json string, returning
 	// the resulting byte slice and any possible error. Returned error
 	// (if any) belongs to the json serialization phase.
+	// It also serializes the minimum and maximum boundary values for
+	// all mutable and immutable settings as two other json strings with
+	// the same format (if a setting has no lower/upper restrictive
+	// value, it will have no corresponding field in the boundary
+	// values version).
 	// This method helps to decouple the configuration settings format
 	// versions from the database schema format versions.
-	Serialize() ([]byte, error)
+	Serialize() (ms, minb, maxb []byte, err error)
 
 	// Version returns the semantic version of this Settings format.
 	Version() model.SemVer

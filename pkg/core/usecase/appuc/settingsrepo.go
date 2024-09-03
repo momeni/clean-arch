@@ -54,6 +54,19 @@ type SettingsConnQueryer interface {
 	// in addition to its visible settings (as an instance of the
 	// version-independent model.VisibleSettings struct).
 	//
+	// The settings boundary values are also returned as `minb` and
+	// `maxb` instances (of the version-independent model.Settings
+	// struct), taken from the base settings. In order to sync these
+	// boundary values from the base settings to the database (so they
+	// can be queried by other components from the database), it is
+	// required to perform a migration or use the Update method of the
+	// SettingsTxQueryer interface instead. In other words, Fetch
+	// neither updates the database nor verifies it beyound the version
+	// of the persisted configuration settings.
+	// If the database settings were out of the acceptable range of
+	// values, they will take the nearest (minimum or maximum) boundary
+	// value and that adjustment will be logged as a warning.
+	//
 	// Fetch requires a connection because the new Builder instance
 	// may not be created but after a successful commit of the mutable
 	// settings fetching query. It is also reified by the minor-version
@@ -61,9 +74,12 @@ type SettingsConnQueryer interface {
 	// which expects a connection instance as they are used before the
 	// migration process may begin (which depends on an updated instance
 	// of the configuration settings).
-	Fetch(
-		ctx context.Context,
-	) (Builder, *model.VisibleSettings, error)
+	Fetch(ctx context.Context) (
+		b Builder,
+		vs *model.VisibleSettings,
+		minb, maxb *model.Settings,
+		err error,
+	)
 }
 
 // SettingsTxQueryer interface indicates queries which require an open
@@ -86,14 +102,25 @@ type SettingsTxQueryer interface {
 	// settings (which are provided as an instance of the
 	// version-independent model.VisibleSettings struct).
 	//
+	// The settings boundary values are also returned as `minb` and
+	// `maxb` instances (of the version-independent model.Settings
+	// struct), taken from the base settings. The argument `s` settings
+	// must fall in this acceptable range of values, otherwise, an error
+	// will be returned and settings will be kept unchanged.
+	// When updating the database with new settings, the boundary values
+	// will be serialized and stored alongside them too.
+	//
 	// Update requires an open transaction because it is supposed to
 	// be reified by some major-version specific schema migration
 	// settler object (i.e., some stlmigN package) which expects a
 	// transaction instance (as they are used for the last phase of
 	// a multi-database migration operation).
-	Update(
-		ctx context.Context, s *model.Settings,
-	) (Builder, *model.VisibleSettings, error)
+	Update(ctx context.Context, s *model.Settings) (
+		b Builder,
+		vs *model.VisibleSettings,
+		minb, maxb *model.Settings,
+		err error,
+	)
 }
 
 // SettingsQueryer interface indicates queries which can be executed

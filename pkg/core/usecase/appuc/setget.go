@@ -10,16 +10,21 @@ import (
 	"github.com/momeni/clean-arch/pkg/core/usecase/carsuc"
 )
 
-// Settings returns a copy of visible settings which are currently in
-// effect. The effective settings and use case objects which are built
+// Settings returns a pointer to the shared instance of visible settings
+// which are currently in effect, in addition to the settings boundary
+// values which indicate the minimum/maximum acceptable values. If
+// caller needs to modify them, those structs must be deeply cloned.
+// The effective settings and use case objects which are built
 // based on them (and other invisible settings) may be updated
 // atomically, while they are exposed by a series of getter methods. At
 // least one of Reload or UpdateSettings methods must be called before
 // this (and other use case objects getter methods) may be called.
-func (app *UseCase) Settings() model.VisibleSettings {
+func (app *UseCase) Settings() (
+	vs *model.VisibleSettings, minb, maxb *model.Settings,
+) {
 	app.rwlock.RLock()
 	defer app.rwlock.RUnlock()
-	return *app.settings
+	return app.settings, app.minb, app.maxb
 }
 
 // updateAll atomically updates the visible settings and all other use
@@ -28,11 +33,14 @@ func (app *UseCase) Settings() model.VisibleSettings {
 // writing lock (after instantiating all relevant use case objects).
 func (app *UseCase) updateAll(
 	vs *model.VisibleSettings,
+	minb, maxb *model.Settings,
 	carsUseCase *carsuc.UseCase,
 ) {
 	app.rwlock.Lock()
 	defer app.rwlock.Unlock()
 	app.settings = vs
+	app.minb = minb
+	app.maxb = maxb
 	app.carsUseCase = carsUseCase
 }
 

@@ -6,16 +6,9 @@
 SET search_path TO mig1;
 
 CREATE VIEW cars (cid, name, lat, lon, parked, parking_mode)
-AS SELECT
-        cid, name, lat, lon, parked,
-        CASE
-            WHEN parked = true THEN 'old'
-            ELSE NULL
-        END
-    FROM fdw1_0.cars;
+AS SELECT cid, name, lat, lon, parked, parking_mode
+    FROM fdw1_2.cars;
 
 CREATE VIEW settings (component, config, min_bounds, max_bounds)
-AS SELECT component, config,
-        json_object('version': config->>'version'),
-        json_object('version': config->>'version')
-    FROM fdw1_0.settings;
+AS SELECT component, config, min_bounds, max_bounds
+    FROM fdw1_2.settings;

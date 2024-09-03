@@ -78,7 +78,12 @@ type SettingsPersister interface {
 	// using the transaction which is hold by this interface and may be
 	// used for persistence of other tables contents too. The
 	// persistence applies whenever the caller commits its transaction.
-	PersistSettings(ctx context.Context, mutableSettings []byte) error
+	// The minimum and maximum boundary values, i.e., minb and maxb,
+	// which are serialized with the same configuration format will be
+	// persisted alongside the mutableSettings too.
+	PersistSettings(
+		ctx context.Context, mutableSettings, minb, maxb []byte,
+	) error
 }
 
 // SchemaInitializer interface is exposed by each schema version

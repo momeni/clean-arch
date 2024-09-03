@@ -26,7 +26,11 @@ CREATE TABLE settings (
     -- this column and no validation (and of course, we can change it
     -- to jsonb by a minor version update whenever searching in the
     -- database became helpful).
-    config json NOT NULL
+    config json NOT NULL,
+    -- minimum boundary values, following the same format as config
+    min_bounds json NOT NULL,
+    -- maximum boundary values, following the same format as config
+    max_bounds json NOT NULL
 );
 
 ALTER TABLE ONLY settings

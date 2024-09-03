@@ -50,6 +50,7 @@ type UseCase struct {
 	rwlock sync.RWMutex
 
 	settings    *model.VisibleSettings // cached visible settings
+	minb, maxb  *model.Settings        // cached boundary values
 	carsUseCase *carsuc.UseCase
 }
 

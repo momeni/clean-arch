@@ -10,8 +10,10 @@ SET search_path TO caweb1;
 
 -- The version (for each configuration format major version) must match
 -- with the latest supported minor version.
-INSERT INTO settings (component, config)
+INSERT INTO settings (component, config, min_bounds, max_bounds)
 VALUES (
     'caweb',
-    '{"version":"2.0.0","cars":{"delay_of_opm":"12s"}}'::json
+    '{"version":"2.1.0","cars":{"delay_of_opm":"12s"}}'::json,
+    '{"version":"2.1.0","cars":{"delay_of_opm":"1s"}}'::json,
+    '{"version":"2.1.0","cars":{"delay_of_opm":"7h"}}'::json
 );

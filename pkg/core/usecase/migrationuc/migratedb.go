@@ -388,11 +388,11 @@ func (mduc *MigrateDBUseCase) persistSettingsInDBAndFile(
 	ctx context.Context, persister repo.SettingsPersister,
 ) error {
 	if persister != nil {
-		b, err := mduc.targetSettings.Serialize()
+		ms, minb, maxb, err := mduc.targetSettings.Serialize()
 		if err != nil {
 			return fmt.Errorf("serializing target settings: %w", err)
 		}
-		err = persister.PersistSettings(ctx, b)
+		err = persister.PersistSettings(ctx, ms, minb, maxb)
 		if err != nil {
 			return fmt.Errorf("saving mutable settings in DB: %w", err)
 		}

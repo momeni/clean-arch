@@ -9,5 +9,8 @@ CREATE VIEW cars (cid, name, lat, lon, parked, parking_mode)
 AS SELECT cid, name, lat, lon, parked, parking_mode
     FROM fdw1_1.cars;
 
-CREATE VIEW settings (component, config)
-AS SELECT component, config FROM fdw1_1.settings;
+CREATE VIEW settings (component, config, min_bounds, max_bounds)
+AS SELECT component, config,
+        json_object('version': config->>'version'),
+        json_object('version': config->>'version')
+    FROM fdw1_1.settings;

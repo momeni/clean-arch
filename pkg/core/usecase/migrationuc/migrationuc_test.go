@@ -28,6 +28,7 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v0"
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v1"
+	"github.com/momeni/clean-arch/pkg/adapter/db/postgres/migration/sch1v2"
 	"github.com/momeni/clean-arch/pkg/adapter/hash/scram"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
@@ -243,6 +244,7 @@ func (migucts *MigrationUseCasesTestSuite) visitCfgDBVers(
 	for _, dbVer := range []model.SemVer{
 		{sch1v0.Major, sch1v0.Minor, sch1v0.Patch},
 		{sch1v1.Major, sch1v1.Minor, sch1v1.Patch},
+		{sch1v2.Major, sch1v2.Minor, sch1v2.Patch},
 	} {
 		cfgVer := model.SemVer{cfg1.Major, cfg1.Minor, cfg1.Patch}
 		d, name, rs := migucts.createEmptyDB(a, cfgVer, dbVer, suffix)

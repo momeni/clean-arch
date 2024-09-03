@@ -91,7 +91,7 @@ func (iduc *InitDBUseCase) initDB(
 	defer p.Close()
 	err = p.Conn(ctx, func(ctx context.Context, c repo.Conn) error {
 		return c.Tx(ctx, func(ctx context.Context, tx repo.Tx) error {
-			ms, err := iduc.settings.Serialize()
+			ms, minb, maxb, err := iduc.settings.Serialize()
 			if err != nil {
 				return fmt.Errorf("obtaining mutable settings: %w", err)
 			}
@@ -102,7 +102,7 @@ func (iduc *InitDBUseCase) initDB(
 			if err := dbi(ctx, si); err != nil {
 				return fmt.Errorf("initializing schema: %w", err)
 			}
-			err = si.PersistSettings(ctx, ms)
+			err = si.PersistSettings(ctx, ms, minb, maxb)
 			if err != nil {
 				return fmt.Errorf("saving mutable settings: %w", err)
 			}

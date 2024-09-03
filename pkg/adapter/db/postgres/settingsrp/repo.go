@@ -57,8 +57,24 @@ func (settings *Repo) Conn(c repo.Conn) appuc.SettingsConnQueryer {
 // fresh configuration instance as an appuc.Builder interface in
 // addition to its visible settings (as an instance of the
 // version-independent model.VisibleSettings struct).
+//
+// The settings boundary values are also returned as `minb` and
+// `maxb` instances (of the version-independent model.Settings
+// struct), taken from the base settings. In order to sync these
+// boundary values from the base settings to the database (so they
+// can be queried by other components from the database), it is
+// required to perform a migration or use the Update method of the
+// SettingsTxQueryer interface instead. In other words, Fetch
+// neither updates the database nor verifies it beyound the version
+// of the persisted configuration settings.
+// If the database settings were out of the acceptable range of
+// values, they will take the nearest (minimum or maximum) boundary
+// value and that adjustment will be logged as a warning.
 func (cq connQueryer) Fetch(ctx context.Context) (
-	appuc.Builder, *model.VisibleSettings, error,
+	b appuc.Builder,
+	vs *model.VisibleSettings,
+	minb, maxb *model.Settings,
+	err error,
 ) {
 	return Fetch(ctx, cq.Conn, cq.baseConfs)
 }
@@ -89,8 +105,19 @@ func (settings *Repo) Tx(tx repo.Tx) appuc.SettingsTxQueryer {
 // the appuc.Builder interface in addition to its visible settings
 // (which are provided as an instance of the version-independent
 // model.VisibleSettings struct).
-func (tq txQueryer) Update(
-	ctx context.Context, s *model.Settings,
-) (appuc.Builder, *model.VisibleSettings, error) {
+//
+// The settings boundary values are also returned as `minb` and
+// `maxb` instances (of the version-independent model.Settings
+// struct), taken from the base settings. The argument `s` settings
+// must fall in this acceptable range of values, otherwise, an error
+// will be returned and settings will be kept unchanged.
+// When updating the database with new settings, the boundary values
+// will be serialized and stored alongside them too.
+func (tq txQueryer) Update(ctx context.Context, s *model.Settings) (
+	b appuc.Builder,
+	vs *model.VisibleSettings,
+	minb, maxb *model.Settings,
+	err error,
+) {
 	return Update(ctx, tq.Tx, tq.baseConfs, s)
 }

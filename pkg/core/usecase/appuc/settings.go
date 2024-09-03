@@ -36,24 +36,23 @@ import (
 // read-write lock will be used in order to pause other goroutines and
 // switch all use case objects to new instances. The order of these
 // locks ensures a deadlock-free implementation.
+//
+// The returned `vs` vissible settings and `minb` and `maxb` which are
+// minimum/maximum boundary settings values are pointers to the shared
+// structs. If caller needs to modify them, those structs must be deeply
+// cloned beforehand.
 func (app *UseCase) UpdateSettings(
 	ctx context.Context, s *model.Settings,
-) (model.VisibleSettings, error) {
+) (vs *model.VisibleSettings, minb, maxb *model.Settings, err error) {
 	app.mutex.Lock()
 	defer app.mutex.Unlock()
-	var (
-		b   Builder
-		vs  *model.VisibleSettings
-		err error
-	)
+	var b Builder
 	err = app.pool.Conn(
-		ctx,
-		func(ctx context.Context, c repo.Conn) error {
+		ctx, func(ctx context.Context, c repo.Conn) error {
 			return c.Tx(
-				ctx,
-				func(ctx context.Context, tx repo.Tx) error {
+				ctx, func(ctx context.Context, tx repo.Tx) error {
 					q := app.settingsRepo.Tx(tx)
-					b, vs, err = q.Update(ctx, s)
+					b, vs, minb, maxb, err = q.Update(ctx, s)
 					return err
 				},
 			)
@@ -61,14 +60,14 @@ func (app *UseCase) UpdateSettings(
 	)
 	if err != nil {
 		err = fmt.Errorf("delegating update to settings repo: %w", err)
-		return model.VisibleSettings{}, err
+		return nil, nil, nil, err
 	}
-	err = app.renewState(b, vs)
+	err = app.renewState(b, vs, minb, maxb)
 	if err != nil {
 		err = fmt.Errorf("renewing state: %w", err)
-		return model.VisibleSettings{}, err
+		return nil, nil, nil, err
 	}
-	return *vs, nil
+	return vs, minb, maxb, nil
 }
 
 // Reload queries the settings repository in order to fetch the current
@@ -100,22 +99,22 @@ func (app *UseCase) Reload(ctx context.Context) error {
 	app.mutex.Lock()
 	defer app.mutex.Unlock()
 	var (
-		b   Builder
-		vs  *model.VisibleSettings
-		err error
+		b          Builder
+		vs         *model.VisibleSettings
+		minb, maxb *model.Settings
+		err        error
 	)
 	err = app.pool.Conn(
-		ctx,
-		func(ctx context.Context, c repo.Conn) error {
+		ctx, func(ctx context.Context, c repo.Conn) error {
 			q := app.settingsRepo.Conn(c)
-			b, vs, err = q.Fetch(ctx)
+			b, vs, minb, maxb, err = q.Fetch(ctx)
 			return err
 		},
 	)
 	if err != nil {
 		return fmt.Errorf("reloading by settings repo: %w", err)
 	}
-	err = app.renewState(b, vs)
+	err = app.renewState(b, vs, minb, maxb)
 	if err != nil {
 		return fmt.Errorf("renewing state: %w", err)
 	}
@@ -129,12 +128,12 @@ func (app *UseCase) Reload(ctx context.Context) error {
 // method slower (as it is write-synchronized and should be kept as
 // fast running as possible).
 func (app *UseCase) renewState(
-	b Builder, vs *model.VisibleSettings,
+	b Builder, vs *model.VisibleSettings, minb, maxb *model.Settings,
 ) error {
 	carsUseCase, err := b.NewCarsUseCase(app.pool, app.carsRepo)
 	if err != nil {
 		return fmt.Errorf("creating cars use case: %w", err)
 	}
-	app.updateAll(vs, carsUseCase)
+	app.updateAll(vs, minb, maxb, carsUseCase)
 	return nil
 }

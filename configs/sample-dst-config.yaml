@@ -11,11 +11,11 @@ database:
   # port number
   port: 5456
   # database name which should contain complete semantic version
-  name: caweb1_1_0
+  name: caweb1_2_0
   # passwords directory should contain a .pgpass or .pgpass.new file
   # containing the PostgreSQL standard password lines following this
   # format:  127.0.0.1:5456:caweb1_0_0:caweb:tHePaSsWoRd
-  pass-dir: dist/.db/caweb1_1_0
+  pass-dir: dist/.db/caweb1_2_0
 gin:
   logger: true
   recovery: true
@@ -48,6 +48,6 @@ usecases:
 # In this sense, these settings are immutable.
 versions:
   # semantic version of the database schema
-  database: 1.1.0
+  database: 1.2.0
   # semantic version of the configuration file itself
   config: 2.1.0
