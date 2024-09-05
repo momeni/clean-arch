@@ -8,7 +8,13 @@
 // configuration settings.
 package gin
 
-import "github.com/gin-gonic/gin"
+import (
+	"log/slog"
+
+	ginlogger "github.com/FabienMht/ginslog/logger"
+	ginrecovery "github.com/FabienMht/ginslog/recovery"
+	"github.com/gin-gonic/gin"
+)
 
 // HandlerFunc defines a gin middleware function.
 // Each middleware will be called in order of its registration,
@@ -25,6 +31,7 @@ type Engine = gin.Engine
 // middleware functions (if any).
 func New(middlewares ...HandlerFunc) *Engine {
 	e := gin.New()
+	e.SetTrustedProxies([]string{"127.0.0.1"})
 	e.Use(middlewares...)
 	return e
 }
@@ -32,10 +39,10 @@ func New(middlewares ...HandlerFunc) *Engine {
 // Logger middleware logs incoming requests and their responses
 // which is useful for debugging.
 func Logger() HandlerFunc {
-	return gin.Logger()
+	return ginlogger.New(slog.Default())
 }
 
 // Recovery middleware recovers panics and responds with 500 to clients.
 func Recovery() HandlerFunc {
-	return gin.Recovery()
+	return ginrecovery.New(slog.Default())
 }
