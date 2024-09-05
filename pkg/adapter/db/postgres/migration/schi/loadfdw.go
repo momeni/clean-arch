@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/momeni/clean-arch/pkg/core/log"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
 )
@@ -92,6 +93,15 @@ OPTIONS (user '%s', password '%s')`,
 FROM SERVER %s
 INTO %s`, remoteSchema, server, localSchema),
 	); err != nil {
+		if h == "host.containers.internal" {
+			log.Warn(ctx, `if database is running in a podman container,
+it may fail to access the host system via host.containers.internal name
+because it is not supported by "pasta" which is the new default
+rootless network handler; in this case, consider switching back to
+"slirp4netns" by editing /etc/containers/containers.conf file and
+putting this line in the [network] section:
+default_rootless_network_cmd = "slirp4netns"`)
+		}
 		return fmt.Errorf(
 			"importing %q foreign schema of %q server into %q: %w",
 			remoteSchema, server, localSchema, err,
