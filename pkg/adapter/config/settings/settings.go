@@ -108,7 +108,7 @@ type Config[C, S any] interface {
 	// settings with out of range values will take the nearest valid
 	// values (from a minimum/maximum boundary value), logging the
 	// adjustment as a warning.
-	MergeConfig(c C) error
+	MergeConfig(ctx context.Context, c C) error
 
 	// Version returns the semantic version of this Config[C, S] struct
 	// contents. Returned version corresponds to one of the supported
@@ -208,12 +208,14 @@ func (a Adapter[C, S]) Clone() migrationuc.Settings {
 // settings with out of range values will take the nearest valid
 // values (from a minimum/maximum boundary value), logging the
 // adjustment as a warning.
-func (a Adapter[C, S]) MergeSettings(s migrationuc.Settings) error {
+func (a Adapter[C, S]) MergeSettings(
+	ctx context.Context, s migrationuc.Settings,
+) error {
 	c, ok := s.(Dereferencer[C])
 	if !ok {
 		return fmt.Errorf("unsupported settings type: %T", s)
 	}
-	return a.MergeConfig(c.Dereference())
+	return a.MergeConfig(ctx, c.Dereference())
 }
 
 // Serialize finds out about the mutable settings of its embedded Config

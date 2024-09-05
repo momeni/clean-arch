@@ -180,7 +180,7 @@ func (mduc *MigrateDBUseCase) migrateSettings(
 	}
 	mduc.srcSettings = ss
 	ts := ss.Clone()
-	if err := ts.MergeSettings(mduc.dstSettings); err != nil {
+	if err := ts.MergeSettings(ctx, mduc.dstSettings); err != nil {
 		return false, fmt.Errorf("merging src/dst settings: %w", err)
 	}
 	mduc.targetSettings = ts

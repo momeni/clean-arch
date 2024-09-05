@@ -526,7 +526,7 @@ func (c *Config) Clone() *Config {
 // way, settings may fail to fit in the expected range of boundary
 // values. In this case, they will take the nearest (minimum/maximum)
 // value and the violated boundaries will be logged as warning.
-func (c *Config) MergeConfig(c2 *Config) error {
+func (c *Config) MergeConfig(ctx context.Context, c2 *Config) error {
 	c.Database = c2.Database
 	settings.OverwriteNil(&c.Gin.Logger, c2.Gin.Logger)
 	settings.OverwriteNil(&c.Gin.Recovery, c2.Gin.Recovery)
@@ -545,7 +545,7 @@ func (c *Config) MergeConfig(c2 *Config) error {
 		c.Usecases.Cars.MaxDelayOfOPM,
 	); err != nil {
 		log.Warn(
-			context.TODO(),
+			ctx,
 			"delay of opm is adjusted by boundary values",
 			log.Valuer("value", err.Value),
 			log.Valuer("minb", c.Usecases.Cars.MinDelayOfOPM),

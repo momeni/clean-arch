@@ -185,7 +185,7 @@ type Settings interface {
 	// settings with out of range values will take the nearest valid
 	// values (from a minimum/maximum boundary value), logging the
 	// adjustment as a warning.
-	MergeSettings(s Settings) error
+	MergeSettings(ctx context.Context, s Settings) error
 
 	// Serialize finds out about the mutable settings of this Settings
 	// instance and tries to serialize them as a json string, returning
