@@ -23,11 +23,14 @@ type resource struct {
 
 // Register instantiates a resource adapting the cars use case instance
 // with the relevant REST APIs including:
-//  1. PATCH request to /api/caweb/v1/cars/:cid
+//  1. PATCH request to /api/caweb/(v1|v2)/cars/:cid
 //     in order to ride or park a car.
-func Register(r *gin.RouterGroup, cars func() *carsuc.UseCase) {
+//
+// The same APIs are published as v1 and v2 RESTful endpoits.
+func Register(r1, r2 *gin.RouterGroup, cars func() *carsuc.UseCase) {
 	rs := &resource{cars: cars}
-	r.PATCH("cars/:cid", rs.UpdateCar)
+	r1.PATCH("cars/:cid", rs.UpdateCar)
+	r2.PATCH("cars/:cid", rs.UpdateCar)
 }
 
 func (rs *resource) UpdateCar(c *gin.Context) {

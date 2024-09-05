@@ -49,8 +49,9 @@ func Register(
 	if err != nil {
 		return fmt.Errorf("reloading use cases based on DB: %w", err)
 	}
-	r := e.Group("/api/caweb/v1")
-	settingsrs.Register(r, appUseCase)
-	carsrs.Register(r, appUseCase.CarsUseCase)
+	r1 := e.Group("/api/caweb/v1")
+	r2 := e.Group("/api/caweb/v2")
+	settingsrs.Register(r1, r2, appUseCase)
+	carsrs.Register(r1, r2, appUseCase.CarsUseCase)
 	return nil
 }

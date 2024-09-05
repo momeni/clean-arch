@@ -28,6 +28,7 @@ import (
 	"github.com/momeni/clean-arch/pkg/adapter/db/postgres"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin"
 	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/routes"
+	"github.com/momeni/clean-arch/pkg/adapter/restful/gin/settingsrs"
 	"github.com/momeni/clean-arch/pkg/core/model"
 	"github.com/momeni/clean-arch/pkg/core/repo"
 	"github.com/momeni/clean-arch/pkg/core/usecase/migrationuc"
@@ -83,11 +84,15 @@ func (igts *IntegrationGinTestSuite) SetupSuite() {
 
 	igts.Gin = gin.New(gin.Logger(), gin.Recovery())
 	igts.Require().NotNil(igts.Gin, "cannot instantiate Gin engine")
+	minDelay := settings.Duration(1 * time.Second)
 	delay := settings.Duration(2 * time.Second)
+	maxDelay := settings.Duration(10 * time.Second)
 	c := &cfg2.Config{
 		Usecases: cfg2.Usecases{
 			Cars: cfg2.Cars{
-				DelayOfOPM: &delay,
+				DelayOfOPM:    &delay,
+				MinDelayOfOPM: &minDelay,
+				MaxDelayOfOPM: &maxDelay,
 			},
 		},
 		Vers: vers.Config{
@@ -205,7 +210,7 @@ func (igts *IntegrationGinTestSuite) TestBadRequest() {
 			w := httptest.NewRecorder()
 			req, err := http.NewRequest(
 				http.MethodPatch,
-				"/api/caweb/v1/cars/"+missingCarID.String(),
+				"/api/caweb/v2/cars/"+missingCarID.String(),
 				tc.body,
 			)
 			igts.Require().NoError(err, "cannot create PATCH request")
@@ -279,7 +284,7 @@ func (igts *IntegrationGinTestSuite) TestNotFound() {
 			w := httptest.NewRecorder()
 			req, err := http.NewRequest(
 				http.MethodPatch,
-				"/api/caweb/v1/cars/"+missingCarID.String(),
+				"/api/caweb/v2/cars/"+missingCarID.String(),
 				tc.body,
 			)
 			igts.Require().NoError(err, "cannot create PATCH request")
@@ -332,7 +337,7 @@ func (igts *IntegrationGinTestSuite) TestRide() {
 	w := httptest.NewRecorder()
 	req, err := http.NewRequest(
 		http.MethodPatch,
-		"/api/caweb/v1/cars/"+carID.String(),
+		"/api/caweb/v2/cars/"+carID.String(),
 		urlEncoded(map[string]string{
 			"op":  "ride",
 			"lon": "10.5",
@@ -376,7 +381,7 @@ func (igts *IntegrationGinTestSuite) testPark(mode string) {
 	w := httptest.NewRecorder()
 	req, err := http.NewRequest(
 		http.MethodPatch,
-		"/api/caweb/v1/cars/"+carID.String(),
+		"/api/caweb/v2/cars/"+carID.String(),
 		urlEncoded(map[string]string{
 			"op":   "park",
 			"mode": mode,
@@ -422,7 +427,7 @@ func (igts *IntegrationGinTestSuite) TestSettings() {
 	igts.Require().NoError(err, "cannot serialize settings req body")
 	req, err := http.NewRequest(
 		http.MethodPut,
-		"/api/caweb/v1/settings",
+		"/api/caweb/v2/settings",
 		bytes.NewReader(b),
 	)
 	igts.Require().NoError(err, "cannot create PUT request")
@@ -433,16 +438,26 @@ func (igts *IntegrationGinTestSuite) TestSettings() {
 	igts.Run("querying settings", func() {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(
-			http.MethodGet, "/api/caweb/v1/settings", nil,
+			http.MethodGet, "/api/caweb/v2/settings", nil,
 		)
 		igts.Require().NoError(err, "cannot create GET request")
 
 		igts.Gin.ServeHTTP(w, req)
 		igts.Equal(200, w.Code)
 		b := w.Body.Bytes()
-		s := &model.VisibleSettings{}
+		s := &settingsrs.SettingsResp{}
 		igts.NoError(json.Unmarshal(b, s), "settings is not json")
-		igts.Equal(&d, s.ParkingMethod.Delay, "wrong delay")
+		igts.Equal(&d, s.Settings.ParkingMethod.Delay, "wrong delay")
+		if igts.NotNil(s.MinBounds.ParkingMethod.Delay, "min delay") {
+			igts.GreaterOrEqual(
+				d, *s.MinBounds.ParkingMethod.Delay, "too small delay",
+			)
+		}
+		if igts.NotNil(s.MaxBounds.ParkingMethod.Delay, "max delay") {
+			igts.LessOrEqual(
+				d, *s.MaxBounds.ParkingMethod.Delay, "too large delay",
+			)
+		}
 	})
 	igts.Run(
 		"parking with 5-secs delay", igts.timedParking(5*time.Second),
