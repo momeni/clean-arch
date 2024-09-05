@@ -34,14 +34,14 @@ func (app *UseCase) Settings() (
 func (app *UseCase) updateAll(
 	vs *model.VisibleSettings,
 	minb, maxb *model.Settings,
-	carsUseCase *carsuc.UseCase,
+	managed managedUseCases,
 ) {
 	app.rwlock.Lock()
 	defer app.rwlock.Unlock()
 	app.settings = vs
 	app.minb = minb
 	app.maxb = maxb
-	app.carsUseCase = carsUseCase
+	app.managedUseCases = managed
 }
 
 // CarsUseCase returns the currently effective cars use case object. At

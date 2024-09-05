@@ -46,14 +46,22 @@ func (app *UseCase) UpdateSettings(
 ) (vs *model.VisibleSettings, minb, maxb *model.Settings, err error) {
 	app.mutex.Lock()
 	defer app.mutex.Unlock()
-	var b Builder
+	var managed managedUseCases
 	err = app.pool.Conn(
 		ctx, func(ctx context.Context, c repo.Conn) error {
 			return c.Tx(
 				ctx, func(ctx context.Context, tx repo.Tx) error {
 					q := app.settingsRepo.Tx(tx)
+					var b Builder
 					b, vs, minb, maxb, err = q.Update(ctx, s)
-					return err
+					if err != nil {
+						return fmt.Errorf("database update: %w", err)
+					}
+					managed, err = app.newManagedUseCases(b)
+					if err != nil {
+						return fmt.Errorf("creating use cases: %w", err)
+					}
+					return nil
 				},
 			)
 		},
@@ -62,11 +70,7 @@ func (app *UseCase) UpdateSettings(
 		err = fmt.Errorf("delegating update to settings repo: %w", err)
 		return nil, nil, nil, err
 	}
-	err = app.renewState(b, vs, minb, maxb)
-	if err != nil {
-		err = fmt.Errorf("renewing state: %w", err)
-		return nil, nil, nil, err
-	}
+	app.updateAll(vs, minb, maxb, managed)
 	return vs, minb, maxb, nil
 }
 
@@ -114,26 +118,29 @@ func (app *UseCase) Reload(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reloading by settings repo: %w", err)
 	}
-	err = app.renewState(b, vs, minb, maxb)
+	managed, err := app.newManagedUseCases(b)
 	if err != nil {
-		return fmt.Errorf("renewing state: %w", err)
+		return fmt.Errorf("creating use cases: %w", err)
 	}
+	app.updateAll(vs, minb, maxb, managed)
 	return nil
 }
 
-// renewState creates all relevant use case objects using the given
-// Builder instance and then passes them all to the updateAll method.
-// This method factors out the common use case creation logic out of
-// the UpdateSettings and Reload methods without making the updateAll
-// method slower (as it is write-synchronized and should be kept as
-// fast running as possible).
-func (app *UseCase) renewState(
-	b Builder, vs *model.VisibleSettings, minb, maxb *model.Settings,
-) error {
+// newManagedUseCases creates all relevant use case objects using the
+// given Builder instance and wraps their pointers by a managedUseCases
+// struct, so they may be passed to the updateAll method later.
+// The updateAll is not called directly because after a successful
+// instantiation of all use case objects, we may need to wait for a
+// database transaction to commit yet.
+func (app *UseCase) newManagedUseCases(
+	b Builder,
+) (managedUseCases, error) {
+	var nilm managedUseCases
 	carsUseCase, err := b.NewCarsUseCase(app.pool, app.carsRepo)
 	if err != nil {
-		return fmt.Errorf("creating cars use case: %w", err)
+		return nilm, fmt.Errorf("creating cars use case: %w", err)
 	}
-	app.updateAll(vs, minb, maxb, carsUseCase)
-	return nil
+	return managedUseCases{
+		carsUseCase: carsUseCase,
+	}, nil
 }

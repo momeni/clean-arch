@@ -49,8 +49,13 @@ type UseCase struct {
 	// (i.e., visible settings and use case objects).
 	rwlock sync.RWMutex
 
-	settings    *model.VisibleSettings // cached visible settings
-	minb, maxb  *model.Settings        // cached boundary values
+	settings   *model.VisibleSettings // cached visible settings
+	minb, maxb *model.Settings        // cached boundary values
+
+	managedUseCases // all use cases, but the appuc itself
+}
+
+type managedUseCases struct {
 	carsUseCase *carsuc.UseCase
 }
 
